@@ -1,35 +1,31 @@
-
-
+#pragma once
 #include <Wire.h>
 #include <MPU6050.h>
 
 class IMU {
-  private:
+public:
+  IMU();
+  void  setup();
+  void  update();
 
-    MPU6050 imu;
+  float getRoll()  const;
+  float getPitch() const;
+  float getYaw()   const;
 
-    unsigned long lastTime = 0;
+  // Gyro rates in rad/s — used by Position to correct optical flow for rotation
+  float getGX() const;
+  float getGY() const;
+  float getGZ() const;
 
-    float position[3];
-    float velocity[3];
-    float static_accel[6];  // [0-2]: electronic accel bias, [3-5]: gyro bias
+private:
+  MPU6050       _imu;
+  unsigned long _lastMicros = 0;
 
-    float roll  = 0.0f;     // radians, updated each call to update()
-    float pitch = 0.0f;     // radians, updated each call to update()
+  float _accelBias[3] = {};
+  float _gyroBias[3]  = {};
 
-    int zupt_count = 0;     // consecutive samples below ZUPT threshold
-
-  public:
-    IMU();
-
-    void setup();
-    
-    void update();
-
-    float getX() const;
-    float getY() const;
-    float getZ() const;
-
-    void reset();
-
+  float _roll  = 0.0f;
+  float _pitch = 0.0f;
+  float _yaw   = 0.0f;
+  float _gRate[3] = {};
 };

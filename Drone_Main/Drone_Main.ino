@@ -1,160 +1,59 @@
-#include <ICM_20948.h> //IMU library
 #include <Arduino.h>
 #include "IMU.h"
-//#include "controller.h"
+#include "FlowSensor.h"
+#include "Rangefinder.h"
+#include "Position.h"
+#include "controller.h"
 
-/*
-IMU setup
-*/
-IMU imu;
-
-
-/*
-end IMU setup
-*/
-
-/*
-controller setup
-*/
-// constexpr int HIST_SIZE = 100;
-// float histZ[HIST_SIZE]; //Z
-// float histR[HIST_SIZE]; //Roll
-// float histP[HIST_SIZE]; //Pitch
-// float histW[HIST_SIZE]; //Yaw
-
-// constexpr float dt = 0.001f;
-
-// // Z gains
-// constexpr float kpZ = 0.0f;
-// constexpr float kiZ = 0.0f;
-// constexpr float kdZ = 0.0f;
-
-// //Roll gains
-// constexpr float kpR = 0.0f;
-// constexpr float kiR = 0.0f;
-// constexpr float kdR = 0.0f;
-
-// //Pitch gains
-// constexpr float kpP = 0.0f;
-// constexpr float kiP = 0.0f;
-// constexpr float kdP = 0.0f;
-
-// //Yaw gains
-// constexpr float kpW = 0.0f;
-// constexpr float kiW = 0.0f;
-// constexpr float kdW = 0.0f;
-
-// PID PIDz(kpZ, kiZ, kdZ, dt);
-// PID PIDr(kpR, kiR, kdR, dt);
-// PID PIDp(kpP, kiP, kdP, dt);
-// PID PIDw(kpW, kiW, kdW, dt);
-/*
-end controller setup
-*/
-
-
-/* 
-============== program begin ====================
-*/ 
-
+IMU         imu;
+FlowSensor  flow(10);    // CS pin 10 — MOSI=11, MISO=12, SCK=13
+Rangefinder rangefinder;
+Position    position;
+Controller  controller;
 
 void setup() {
   Serial.begin(115200);
 
-  imu.setup();
+  // ── Waypoints ──────────────────────────────────────────────────────────────
+  // Define your flight path here in metres, relative to the start position.
+  // The drone will visit each point in order then hold position at the last one.
+  // Format: addWaypoint(x_forward, y_left, z_up)
+  //
+  // Example: rise 1 m, move 2 m forward, then 1.5 m left, then return overhead
+  controller.addWaypoint( 0.0f,  0.0f,  1.0f);   // takeoff: rise 1 m
+  controller.addWaypoint( 2.0f,  0.0f,  1.0f);   // move 2 m forward
+  controller.addWaypoint( 2.0f,  1.5f,  1.0f);   // move 1.5 m left
+  controller.addWaypoint( 0.0f,  0.0f,  1.0f);   // return overhead
+  controller.addWaypoint( 0.0f,  0.0f,  0.0f);   // land
 
+  // ── Sensor init ────────────────────────────────────────────────────────────
+  imu.setup();             // Wire.begin() + MPU6050 calibration (~2.5 s)
+  rangefinder.setup();     // VL53L1X on I2C  (addr 0x29)
+  flow.setup();            // PMW3901 on SPI  (CS pin 10)
+  position.setup(imu, flow, rangefinder);
 
-  // while (!SERIAL_PORT);
-  // {
-  //   // wait for serial port response
-  // }
-
-  // #ifdef USE_SPI
-  //   SPI_PORT.begin(); //initialize IMU communication
-  // #else
-  //   Serial.println("Failed to start SPI");
-  // #endif
-
-  // bool initialized = false;
-  // while (!initialized)
-  // {
-  //   myICM.begin(CS_PIN, SPI_PORT);
-
-  //   SERIAL_PORT.print(F("Initialization of the sensor returned: "));
-  //   SERIAL_PORT.println(myICM.statusString());
-  //   if (myICM.status != ICM_20948_Stat_Ok)
-  //   {
-  //     SERIAL_PORT.println("Trying again...");
-  //     delay(500);
-  //   }
-  //   else
-  //   {
-  //     initialized = true;
-  //     SERIAL_PORT.println("Success");
-  //   }
-  // }
-
-  // // fill empty position history lists
-  // for (int i = 0; i < HIST_SIZE; i++) 
-  // {
-  //   histZ[i] = 0.0f;
-  //   histR[i] = 0.0f;
-  //   histP[i] = 0.0f;
-  //   histW[i] = 0.0f;
-  // }
+  // ── Controller init ────────────────────────────────────────────────────────
+  controller.setup();      // attaches ESCs and sends 2 s disarm signal
 }
 
-/*
-================ MAIN ================================
-*/
+// Print position and orientation at 10 Hz without blocking the control loop
+static void printTelemetry() {
+  static unsigned long lastPrint = 0;
+  if (micros() - lastPrint < 100000UL) return;
+  lastPrint = micros();
+
+  Serial.print("X: ");      Serial.print(position.getX(), 3);
+  Serial.print("  Y: ");    Serial.print(position.getY(), 3);
+  Serial.print("  Z: ");    Serial.print(position.getZ(), 3);
+  Serial.print("  Roll: "); Serial.print(degrees(imu.getRoll()),  1);
+  Serial.print("  Pitch: ");Serial.print(degrees(imu.getPitch()), 1);
+  Serial.print("  Yaw: ");  Serial.print(degrees(imu.getYaw()),   1);
+  Serial.print("  WP: ");   Serial.println(controller.isComplete() ? "DONE" : "flying");
+}
 
 void loop() {
   imu.update();
-
-  Serial.print("X: ");
-  Serial.print(imu.getX());
-  Serial.print(" Y: ");
-  Serial.print(imu.getY());
-  Serial.print(" Z: ");
-  Serial.println(imu.getZ());
-
-  delay(50);
-
-
-  // /*
-  // IMPORTANT:
-  // ADD EMERGENCY STOP BUTTON TO CUT ALL POWER IN CASE OF PID RUNAWAY OR IMMANENT CRASHES
-  // */
-
-  // if (myICM.dataReady())
-  // {
-  //   myICM.getAGMT();
-  //   //print raw data:
-  //   printRawAGMT(myICM.agmt);
-  //   Serial.println(myICM.agmt);
-  //   printScaledAGMT(&myICM);
-  //   delay(30);
+  position.update(imu, flow, rangefinder);
+  controller.update(imu, position);
+  printTelemetry();
 }
-
-
-
-
-  // static unsigned long lastMicros = 0;
-  // unsigned long now = micros();
-
-  // if (now - lastMicros >= (unsigned long)(dt * 1e6)) {
-  //   unsigned float lastMicros = now;
-
-  //   // READ CURRENT POSITION FROM IMU FOR IMPORTANT POSITIONS
-
-  //   // FUNTION TO UPDATE POSITION HISTORIES (MOVE EVERYTHING UP BY ONE PLACE APPEND CURRENT TO END)
-
-  //   // RUN COMPUTE
-  //   PIDz.compute(histZ, des, &out);
-
-
-  //   // calc control vector
-
-  //   //send control vector
-  // }
-
