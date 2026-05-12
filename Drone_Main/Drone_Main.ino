@@ -4,6 +4,7 @@
 #include "Rangefinder.h"
 #include "Position.h"
 #include "controller.h"
+#include "Gains.h"
 
 IMU         imu;
 FlowSensor  flow(10);    // CS pin 10 — MOSI=11, MISO=12, SCK=13
@@ -13,6 +14,7 @@ Controller  controller;
 
 void setup() {
   Serial.begin(115200);
+  Gains gains = loadGains();
 
   // ── Waypoints ──────────────────────────────────────────────────────────────
   // Define your flight path here in metres, relative to the start position.
@@ -33,7 +35,7 @@ void setup() {
   position.setup(imu, flow, rangefinder);
 
   // ── Controller init ────────────────────────────────────────────────────────
-  controller.setup();      // attaches ESCs and sends 2 s disarm signal
+  controller.setup(gains); // attaches ESCs, sends 2 s disarm signal, applies gains
 }
 
 // Print position and orientation at 10 Hz without blocking the control loop
@@ -48,7 +50,14 @@ static void printTelemetry() {
   Serial.print("  Roll: "); Serial.print(degrees(imu.getRoll()),  1);
   Serial.print("  Pitch: ");Serial.print(degrees(imu.getPitch()), 1);
   Serial.print("  Yaw: ");  Serial.print(degrees(imu.getYaw()),   1);
-  Serial.print("  WP: ");   Serial.println(controller.isComplete() ? "DONE" : "flying");
+  Serial.print("  [gX: "); Serial.print(imu.rawGX(), 1);
+  Serial.print(" gY: ");   Serial.print(imu.rawGY(), 1);
+  Serial.print(" gZ: ");   Serial.print(imu.rawGZ(), 1);
+  Serial.print(" | aX: "); Serial.print(imu.rawAX(), 2);
+  Serial.print(" aY: ");   Serial.print(imu.rawAY(), 2);
+  Serial.print(" aZ: ");   Serial.print(imu.rawAZ(), 2);
+  Serial.println("]");
+  //Serial.print("  WP: ");   Serial.println(controller.isComplete() ? "DONE" : "flying");
 }
 
 void loop() {

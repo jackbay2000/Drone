@@ -1,32 +1,22 @@
 #include "controller.h"
 #include <math.h>
 
-// ── Attitude PID gains ─────────────────────────────────────────────────────
-// Tune these first, on the bench with props OFF, verifying that the attitude
-// error outputs look correct before installing propellers.
-static constexpr float KP_ROLL  = 0.0f, KI_ROLL  = 0.0f, KD_ROLL  = 0.0f;
-static constexpr float KP_PITCH = 0.0f, KI_PITCH = 0.0f, KD_PITCH = 0.0f;
-static constexpr float KP_YAW   = 0.0f, KI_YAW   = 0.0f, KD_YAW   = 0.0f;
-
-// ── Position PID gains ─────────────────────────────────────────────────────
-// Tune these only after attitude is solid.  Start with kp only; add kd if
-// the drone overshoots waypoints; add ki only if it consistently stops short.
-static constexpr float KP_X = 0.0f, KI_X = 0.0f, KD_X = 0.0f;
-static constexpr float KP_Y = 0.0f, KI_Y = 0.0f, KD_Y = 0.0f;
-static constexpr float KP_Z = 0.0f, KI_Z = 0.0f, KD_Z = 0.0f;
-
 Controller::Controller()
-  // Attitude — output limits in normalised motor delta [-0.5, 0.5]
-  : _pidRoll (KP_ROLL,  KI_ROLL,  KD_ROLL,  -0.5f, 0.5f)
-  , _pidPitch(KP_PITCH, KI_PITCH, KD_PITCH, -0.5f, 0.5f)
-  , _pidYaw  (KP_YAW,   KI_YAW,   KD_YAW,   -0.5f, 0.5f)
-  // Position — X/Y output in radians (tilt angle), Z output as throttle delta
-  , _pidX(KP_X, KI_X, KD_X, -MAX_TILT, MAX_TILT)
-  , _pidY(KP_Y, KI_Y, KD_Y, -MAX_TILT, MAX_TILT)
-  , _pidZ(KP_Z, KI_Z, KD_Z,     -0.4f,    0.4f)
+  : _pidRoll (0, 0, 0, -0.5f,     0.5f)
+  , _pidPitch(0, 0, 0, -0.5f,     0.5f)
+  , _pidYaw  (0, 0, 0, -0.5f,     0.5f)
+  , _pidX    (0, 0, 0, -MAX_TILT, MAX_TILT)
+  , _pidY    (0, 0, 0, -MAX_TILT, MAX_TILT)
+  , _pidZ    (0, 0, 0, -0.4f,     0.4f)
 {}
 
-void Controller::setup() {
+void Controller::setup(const Gains& g) {
+  _pidRoll .setGains(g.kp_roll,  g.ki_roll,  g.kd_roll);
+  _pidPitch.setGains(g.kp_pitch, g.ki_pitch, g.kd_pitch);
+  _pidYaw  .setGains(g.kp_yaw,   g.ki_yaw,   g.kd_yaw);
+  _pidX    .setGains(g.kp_x,     g.ki_x,     g.kd_x);
+  _pidY    .setGains(g.kp_y,     g.ki_y,     g.kd_y);
+  _pidZ    .setGains(g.kp_z,     g.ki_z,     g.kd_z);
   _esc1.attach(PIN_M1, 1000, 2000);
   _esc2.attach(PIN_M2, 1000, 2000);
   _esc3.attach(PIN_M3, 1000, 2000);

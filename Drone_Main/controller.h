@@ -3,6 +3,7 @@
 #include "PID.h"
 #include "IMU.h"
 #include "Position.h"
+#include "Gains.h"
 
 struct Waypoint {
   float x, y, z;   // metres, world frame, relative to start position
@@ -12,7 +13,7 @@ class Controller {
 public:
   Controller();
 
-  void setup();
+  void setup(const Gains& g);
   void update(IMU& imu, Position& pos);
 
   // Build the waypoint list before calling setup()

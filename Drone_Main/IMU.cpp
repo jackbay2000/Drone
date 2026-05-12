@@ -1,9 +1,28 @@
 #include "IMU.h"
 #include <math.h>
 
-static constexpr float FILTER_TAU  = 2.0f;
-static constexpr float ACCEL_GATE  = 0.15f;
+static constexpr float FILTER_TAU  = 0.75f;
 static constexpr float RAD_PER_DEG = 0.01745329251f;
+
+static float median3(float a, float b, float c) {
+  if (a > b) { float t = a; a = b; b = t; }
+  if (b > c) { float t = b; b = c; c = t; }
+  if (a > b) { float t = a; a = b; b = t; }
+  return b;
+}
+
+// Axis remapping — IMU is rotated 90° relative to the optical flow sensor.
+// User confirmed: IMU roll rotates about flow Y, so IMU X = flow Y.
+// Assuming the other axis maps as flow X = IMU Y (no sign flip).
+// If pitch direction is inverted after flashing, negate FLOW_X_SIGN.
+static constexpr float FLOW_X_SIGN =  1.0f;   // flip to -1 if pitch is backwards
+static constexpr float FLOW_Y_SIGN = -1.0f;   // flip to +1 if roll  is backwards
+
+// Rate at which the Z-axis gyro bias estimate is updated in-flight.
+// While the yaw rate stays near zero, the bias slowly tracks thermal drift.
+// Lower = more conservative (less risk of absorbing real slow rotation).
+// At 0.0001 and ~250 Hz the bias converges in roughly 40 s of stationary hover.
+static constexpr float YAW_BIAS_LEARN = 0.0001f;
 
 IMU::IMU() {}
 
@@ -18,11 +37,38 @@ void IMU::setup() {
   }
   Serial.println("IMU connected");
 
-  const int N = 500;
+  // PWR_MGMT_2 (0x6C): explicitly clear all standby bits so every axis is active.
+  // The library's initialize() never touches this register, and some chips power
+  // up with gyro axes in standby, which makes them output exactly zero.
+  Wire.beginTransmission(0x68);
+  Wire.write(0x6C);
+  Wire.write(0x00);
+  Wire.endTransmission();
+  delay(50);
+
+  // Per-axis gyro health check — sample 20 readings and flag any axis that
+  // never leaves zero, which indicates hardware failure on that axis.
+  {
+    bool gx_alive = false, gy_alive = false, gz_alive = false;
+    for (int i = 0; i < 20; i++) {
+      int16_t ax, ay, az, gx, gy, gz;
+      _imu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+      if (gx != 0) gx_alive = true;
+      if (gy != 0) gy_alive = true;
+      if (gz != 0) gz_alive = true;
+      delay(5);
+    }
+    Serial.print(F("Gyro axes: X="));  Serial.print(gx_alive ? F("OK") : F("DEAD"));
+    Serial.print(F("  Y="));           Serial.print(gy_alive ? F("OK") : F("DEAD"));
+    Serial.print(F("  Z="));           Serial.println(gz_alive ? F("OK") : F("DEAD — replace MPU6050, yaw will not work"));
+  }
+
+  // 1000 samples ≈ 5 s; more samples = better gyro bias estimate
+  const int N = 1000;
   int16_t ax, ay, az, gx, gy, gz;
   double sa[3] = {}, sg[3] = {};
 
-  Serial.println("Calibrating — keep still for ~2.5 s...");
+  Serial.println("Calibrating — keep still for ~5 s...");
   for (int i = 0; i < N; i++) {
     _imu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
     sa[0] += ax / 16384.0;  sa[1] += ay / 16384.0;  sa[2] += az / 16384.0;
@@ -30,18 +76,22 @@ void IMU::setup() {
     delay(5);
   }
 
-  float ax_avg = sa[0] / N, ay_avg = sa[1] / N, az_avg = sa[2] / N;
-  _gyroBias[0] = sg[0] / N;
-  _gyroBias[1] = sg[1] / N;
+  // Store biases in flow-sensor frame (X↔Y swap, Z unchanged)
+  // _gyroBias[0] = flow GX bias = IMU GY bias  (sg[1])
+  // _gyroBias[1] = flow GY bias = IMU GX bias  (sg[0])
+  // _gyroBias[2] = flow GZ bias = IMU GZ bias  (sg[2])
+  _gyroBias[0] = sg[1] / N;
+  _gyroBias[1] = sg[0] / N;
   _gyroBias[2] = sg[2] / N;
+
+  // Seed the filter using remapped accel averages
+  float ax_avg = FLOW_X_SIGN * (float)(sa[1] / N);  // flow X = IMU Y
+  float ay_avg = FLOW_Y_SIGN * (float)(sa[0] / N);  // flow Y = IMU X
+  float az_avg =               (float)(sa[2] / N);  // flow Z = IMU Z
 
   _roll  = atan2f(ay_avg, az_avg);
   _pitch = atan2f(-ax_avg, sqrtf(ay_avg * ay_avg + az_avg * az_avg));
   _yaw   = 0.0f;
-
-  _accelBias[0] = ax_avg - (-sinf(_pitch));
-  _accelBias[1] = ay_avg - (cosf(_pitch) * sinf(_roll));
-  _accelBias[2] = az_avg - (cosf(_pitch) * cosf(_roll));
 
   Serial.print("Calibration done.  Roll: ");  Serial.print(degrees(_roll),  1);
   Serial.print(" deg   Pitch: "); Serial.print(degrees(_pitch), 1); Serial.println(" deg");
@@ -58,41 +108,53 @@ void IMU::update() {
   _lastMicros = now;
   if (dt <= 0.0f || dt > 0.1f) return;
 
-  float a[3] = {
-    ax / 16384.0f - _accelBias[0],
-    ay / 16384.0f - _accelBias[1],
-    az / 16384.0f - _accelBias[2]
-  };
+  // Raw values before any remapping — used to identify the physical vertical axis.
+  // At rest: the accel axis reading ~1.0 g is vertical (= gravity direction).
+  // During yaw rotation: the gyro axis that changes is vertical.
+  _rawIMUG[0] = gx / 131.0f;    _rawIMUA[0] = ax / 16384.0f;
+  _rawIMUG[1] = gy / 131.0f;    _rawIMUA[1] = ay / 16384.0f;
+  _rawIMUG[2] = gz / 131.0f;    _rawIMUA[2] = az / 16384.0f;
 
-  _gRate[0] = (gx / 131.0f - _gyroBias[0]) * RAD_PER_DEG;
-  _gRate[1] = (gy / 131.0f - _gyroBias[1]) * RAD_PER_DEG;
-  _gRate[2] = (gz / 131.0f - _gyroBias[2]) * RAD_PER_DEG;
+  // Remap to flow-sensor frame: flow X = IMU Y, flow Y = IMU X, flow Z = IMU Z
+  float a_x = FLOW_X_SIGN * (ay / 16384.0f);
+  float a_y = FLOW_Y_SIGN * (ax / 16384.0f);
+  float a_z =               (az / 16384.0f);
+
+  _gRate[0] = FLOW_X_SIGN * (gy / 131.0f - _gyroBias[0]) * RAD_PER_DEG;
+  _gRate[1] = FLOW_Y_SIGN * (gx / 131.0f - _gyroBias[1]) * RAD_PER_DEG;
+  _gRate[2] =               (gz / 131.0f - _gyroBias[2]) * RAD_PER_DEG;
 
   float alpha = FILTER_TAU / (FILTER_TAU + dt);
 
-  float cp = cosf(_pitch), sp = sinf(_pitch);
-  float cr = cosf(_roll),  sr = sinf(_roll);
+  // Median filter the accel angle reference to reject single-sample spikes
+  // before they enter the complementary filter blend.  The gyro path is unaffected.
+  _accelRollBuf[_accelBufIdx]  = atan2f(a_y, a_z);
+  _accelPitchBuf[_accelBufIdx] = atan2f(-a_x, sqrtf(a_y*a_y + a_z*a_z));
+  _accelBufIdx = (_accelBufIdx + 1) % 3;
 
-  float grav[3] = { -sp, cp * sr, cp * cr };
-  float lin[3]  = { a[0] - grav[0], a[1] - grav[1], a[2] - grav[2] };
-  float lin_mag = sqrtf(lin[0]*lin[0] + lin[1]*lin[1] + lin[2]*lin[2]);
+  float accelRoll  = median3(_accelRollBuf[0],  _accelRollBuf[1],  _accelRollBuf[2]);
+  float accelPitch = median3(_accelPitchBuf[0], _accelPitchBuf[1], _accelPitchBuf[2]);
 
-  float roll_g  = _roll  + _gRate[0] * dt;
-  float pitch_g = _pitch + _gRate[1] * dt;
-  _yaw         += _gRate[2] * dt;
+  _roll  = alpha * (_roll  + _gRate[0] * dt) + (1.0f - alpha) * accelRoll;
+  _pitch = alpha * (_pitch + _gRate[1] * dt) + (1.0f - alpha) * accelPitch;
 
-  if (lin_mag < ACCEL_GATE) {
-    _roll  = alpha * roll_g  + (1.0f - alpha) * atan2f(a[1], a[2]);
-    _pitch = alpha * pitch_g + (1.0f - alpha) * atan2f(-a[0], sqrtf(a[1]*a[1] + a[2]*a[2]));
-  } else {
-    _roll  = roll_g;
-    _pitch = pitch_g;
-  }
+  // Update Z-axis bias while not actively yawing so thermal drift doesn't
+  // accumulate.  The 0.005 rad/s gate (~0.3 deg/s) ignores real rotation.
+  if (fabsf(_gRate[2]) < 0.005f)
+    _gyroBias[2] += (gz / 131.0f - _gyroBias[2]) * YAW_BIAS_LEARN;
+
+  _yaw += _gRate[2] * dt;
 }
 
-float IMU::getRoll()  const { return _roll;     }
-float IMU::getPitch() const { return _pitch;    }
-float IMU::getYaw()   const { return _yaw;      }
-float IMU::getGX()    const { return _gRate[0]; }
-float IMU::getGY()    const { return _gRate[1]; }
-float IMU::getGZ()    const { return _gRate[2]; }
+float IMU::getRoll()  const { return _roll;        }
+float IMU::getPitch() const { return _pitch;       }
+float IMU::getYaw()   const { return _yaw;         }
+float IMU::getGX()    const { return _gRate[0];    }
+float IMU::getGY()    const { return _gRate[1];    }
+float IMU::getGZ()    const { return _gRate[2];    }
+float IMU::rawGX()    const { return _rawIMUG[0]; }
+float IMU::rawGY()    const { return _rawIMUG[1]; }
+float IMU::rawGZ()    const { return _rawIMUG[2]; }
+float IMU::rawAX()    const { return _rawIMUA[0]; }
+float IMU::rawAY()    const { return _rawIMUA[1]; }
+float IMU::rawAZ()    const { return _rawIMUA[2]; }
