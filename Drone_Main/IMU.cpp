@@ -12,9 +12,6 @@ static float median3(float a, float b, float c) {
 }
 
 // Axis remapping — IMU is rotated 90° relative to the optical flow sensor.
-// User confirmed: IMU roll rotates about flow Y, so IMU X = flow Y.
-// Assuming the other axis maps as flow X = IMU Y (no sign flip).
-// If pitch direction is inverted after flashing, negate FLOW_X_SIGN.
 static constexpr float FLOW_X_SIGN =  1.0f;   // flip to -1 if pitch is backwards
 static constexpr float FLOW_Y_SIGN = -1.0f;   // flip to +1 if roll  is backwards
 
@@ -37,17 +34,13 @@ void IMU::setup() {
   }
   Serial.println("IMU connected");
 
-  // PWR_MGMT_2 (0x6C): explicitly clear all standby bits so every axis is active.
-  // The library's initialize() never touches this register, and some chips power
-  // up with gyro axes in standby, which makes them output exactly zero.
   Wire.beginTransmission(0x68);
   Wire.write(0x6C);
   Wire.write(0x00);
   Wire.endTransmission();
   delay(50);
 
-  // Per-axis gyro health check — sample 20 readings and flag any axis that
-  // never leaves zero, which indicates hardware failure on that axis.
+//Gyro check
   {
     bool gx_alive = false, gy_alive = false, gz_alive = false;
     for (int i = 0; i < 20; i++) {
@@ -63,7 +56,7 @@ void IMU::setup() {
     Serial.print(F("  Z="));           Serial.println(gz_alive ? F("OK") : F("DEAD — replace MPU6050, yaw will not work"));
   }
 
-  // 1000 samples ≈ 5 s; more samples = better gyro bias estimate
+// about 5 seconds of sample to grab data
   const int N = 1000;
   int16_t ax, ay, az, gx, gy, gz;
   double sa[3] = {}, sg[3] = {};
@@ -76,7 +69,7 @@ void IMU::setup() {
     delay(5);
   }
 
-  // Store biases in flow-sensor frame (X↔Y swap, Z unchanged)
+  // Store biases in flow-sensor frame (X-Y swap, Z unchanged)
   // _gyroBias[0] = flow GX bias = IMU GY bias  (sg[1])
   // _gyroBias[1] = flow GY bias = IMU GX bias  (sg[0])
   // _gyroBias[2] = flow GZ bias = IMU GZ bias  (sg[2])
@@ -109,8 +102,7 @@ void IMU::update() {
   if (dt <= 0.0f || dt > 0.1f) return;
 
   // Raw values before any remapping — used to identify the physical vertical axis.
-  // At rest: the accel axis reading ~1.0 g is vertical (= gravity direction).
-  // During yaw rotation: the gyro axis that changes is vertical.
+  // At rest: the accel axis reading about 1.0 g is vertical (= gravity direction).
   _rawIMUG[0] = gx / 131.0f;    _rawIMUA[0] = ax / 16384.0f;
   _rawIMUG[1] = gy / 131.0f;    _rawIMUA[1] = ay / 16384.0f;
   _rawIMUG[2] = gz / 131.0f;    _rawIMUA[2] = az / 16384.0f;
@@ -138,8 +130,7 @@ void IMU::update() {
   _roll  = alpha * (_roll  + _gRate[0] * dt) + (1.0f - alpha) * accelRoll;
   _pitch = alpha * (_pitch + _gRate[1] * dt) + (1.0f - alpha) * accelPitch;
 
-  // Update Z-axis bias while not actively yawing so thermal drift doesn't
-  // accumulate.  The 0.005 rad/s gate (~0.3 deg/s) ignores real rotation.
+  // Update Z-axis bias while not actively yawing so thermal drift doesn't accumulate. 0.005 rad/s gate (~0.3 deg/s) ignores real rotation.
   if (fabsf(_gRate[2]) < 0.005f)
     _gyroBias[2] += (gz / 131.0f - _gyroBias[2]) * YAW_BIAS_LEARN;
 
