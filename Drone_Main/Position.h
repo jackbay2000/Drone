@@ -10,9 +10,9 @@ public:
   void  setup(IMU &imu, FlowSensor &flow, Rangefinder &rangefinder);
   void  update(IMU &imu, FlowSensor &flow, Rangefinder &rangefinder);
 
-  float getX() const;  // metres, world frame
-  float getY() const;  // metres, world frame
-  float getZ() const;  // metres, altitude (tilt-corrected, low-pass filtered)
+  float getX() const;  // meters, takeoff-heading body frame
+  float getY() const;  // meters, takeoff-heading body frame
+  float getZ() const;  // meters, altitude (tilt-corrected, low-pass filtered)
 
   void  reset();       // zeroes X and Y; Z follows rangefinder automatically
 

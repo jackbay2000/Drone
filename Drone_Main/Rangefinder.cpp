@@ -19,7 +19,7 @@ void Rangefinder::update() {
   _tof.clearInterrupt();
 
   if (d > 0 && d < 4000) {
-    _distance = d * 0.001f;  // mm to metres
+    _distance = d * 0.001f;  // mm to meters
     _hasData  = true;
   }
 }

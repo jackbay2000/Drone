@@ -8,7 +8,7 @@ public:
   void  setup();
   void  update();
 
-  float getDistance() const;  // metres, raw (no tilt correction)
+  float getDistance() const;  // meters, raw (no tilt correction)
   bool  hasData()     const;  // true once first valid reading received
 
 private:

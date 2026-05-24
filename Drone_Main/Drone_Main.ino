@@ -17,7 +17,7 @@ void setup() {
   Gains gains = loadGains();
 
   // ── Waypoints ──────────────────────────────────────────────────────────────
-  // Define your flight path here in metres, relative to the start position.
+  // Define your flight path here in meters, relative to the start position.
   // The drone will visit each point in order then hold position at the last one.
   // Format: addWaypoint(x_forward, y_left, z_up)
   //

@@ -80,20 +80,13 @@ void Controller::_updatePosition(IMU& imu, Position& pos, float dt) {
     }
   }
 
-  // ── Rotate world-frame error into body frame ───────────────────────────
-  // Waypoints are stored in the world frame (fixed at takeoff).
-  // Roll/pitch commands are in the body frame (rotates with the drone).
-  // Multiplying by the inverse yaw rotation converts between them.
-  float cy = cosf(imu.getYaw());
-  float sy = sinf(imu.getYaw());
-  float ex_b =  ex * cy + ey * sy;   // body forward error  (+X = forward)
-  float ey_b = -ex * sy + ey * cy;   // body lateral error  (+Y = left)
-
   // ── Position → attitude commands ──────────────────────────────────────
+  // Waypoints and position are both in the drone's takeoff-heading frame,
+  // so errors are already body-frame — no yaw rotation needed.
   // Positive forward error  → pitch forward  (+pitch = nose down → moves fwd)
   // Positive leftward error → roll left      (−roll  = left down → moves left)
-  _desiredPitch = _pidX.compute(ex_b, pos.getX(), dt);
-  _desiredRoll  = -_pidY.compute(ey_b, pos.getY(), dt);
+  _desiredPitch = _pidX.compute(ex, pos.getX(), dt);
+  _desiredRoll  = -_pidY.compute(ey, pos.getY(), dt);
   _baseThrottle = _clamp(HOVER_THROTTLE + _pidZ.compute(ez, pos.getZ(), dt), 0.0f, 1.0f);
 }
 
@@ -149,6 +142,6 @@ float Controller::_clamp(float v, float lo, float hi) {
   return v < lo ? lo : (v > hi ? hi : v);
 }
 
-int Controller::_pwm(float normalised) {
-  return 1000 + (int)(normalised * 1000.0f);
+int Controller::_pwm(float normalized) {
+  return 1000 + (int)(normalized * 1000.0f);
 }

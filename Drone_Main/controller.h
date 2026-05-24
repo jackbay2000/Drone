@@ -6,7 +6,7 @@
 #include "Gains.h"
 
 struct Waypoint {
-  float x, y, z;   // metres, world frame, relative to start position
+  float x, y, z;   // meters, body frame, relative to start position
 };
 
 class Controller {
@@ -24,7 +24,7 @@ public:
 private:
   // ── Inner loop: attitude ──────────────────────────────────────────────────
   // Controls roll, pitch, yaw to match the angles commanded by the position loop.
-  // Output is a normalised motor delta [-0.5, 0.5].
+  // Output is a normalized motor delta [-0.5, 0.5].
   //
   // ALL GAINS START AT ZERO — tune before first flight:
   //   1. Raise kp_roll/pitch until drone holds level but just oscillates
@@ -68,7 +68,7 @@ private:
   Servo _esc1, _esc2, _esc3, _esc4;
 
   // ── Flight parameters ─────────────────────────────────────────────────────
-  // HOVER_THROTTLE: normalised [0,1]. Raise until drone just lifts off level.
+  // HOVER_THROTTLE: normalized [0,1]. Raise until drone just lifts off level.
   static constexpr float HOVER_THROTTLE = 0.5f;
   // MAX_TILT: maximum commanded lean in radians (~20°). Caps XY speed.
   static constexpr float MAX_TILT       = 0.35f;
@@ -89,5 +89,5 @@ private:
   void _writeMotors(float roll, float pitch, float yaw, float throttle);
 
   static float _clamp(float v, float lo, float hi);
-  static int   _pwm(float normalised);   // [0,1] → [1000,2000] µs
+  static int   _pwm(float normalized);   // [0,1] → [1000,2000] µs
 };

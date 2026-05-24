@@ -21,7 +21,7 @@ static constexpr int16_t FLOW_GATE  = 1;
 Position::Position() {}
 
 void Position::setup(IMU &imu, FlowSensor &flow, Rangefinder &rangefinder) {
-  // Sensors are already initialised in their own setup() calls.
+  // Sensors are already initialized in their own setup() calls.
   // Nothing extra needed here — just capture the start time.
   _lastMicros = micros();
 }
@@ -43,7 +43,7 @@ void Position::update(IMU &imu, FlowSensor &flow, Rangefinder &rangefinder) {
   }
 
   // Refuse to update X/Y without a valid altitude — altitude is required to
-  // scale the optical flow counts into real-world metres.
+  // scale the optical flow counts into real-world meters.
   if (_z < ALT_MIN) return;
 
   // ── X/Y from optical flow ─────────────────────────────────────────────────
@@ -59,17 +59,13 @@ void Position::update(IMU &imu, FlowSensor &flow, Rangefinder &rangefinder) {
   float dx_f = (float)dx - imu.getGZ() * FOCAL_LEN * dt;
   float dy_f = (float)dy - imu.getGX() * FOCAL_LEN * dt;
 
-  // Convert flow counts to body-frame displacement in metres.
+  // Convert flow counts to body-frame displacement in meters.
   // displacement = counts * height / focal_length
   float disp_x = dx_f * _z / FOCAL_LEN;
   float disp_y = dy_f * _z / FOCAL_LEN;
 
-  // Rotate body-frame displacement into the fixed world frame using yaw so
-  // that X always points the same world direction regardless of drone heading.
-  float cy = cosf(imu.getYaw());
-  float sy = sinf(imu.getYaw());
-  _x += disp_x * cy - disp_y * sy;
-  _y += disp_x * sy + disp_y * cy;
+  _x += disp_x;
+  _y += disp_y;
 }
 
 float Position::getX() const { return _x; }
