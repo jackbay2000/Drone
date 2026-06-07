@@ -13,6 +13,7 @@ public:
 
   void setup(const Gains& g);
   void update(IMU& imu, Position& pos);
+  void halt();               // cut all motors to 1000 µs immediately
 
   // Populate the waypoint list before calling setup()
   void addWaypoint(float x, float y, float z);

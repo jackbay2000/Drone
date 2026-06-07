@@ -80,6 +80,13 @@ void Controller::_writeMotors(float roll, float pitch, float yaw, float throttle
   _esc4.writeMicroseconds(_pwm(_clamp(throttle - roll + pitch + yaw, 0.0f, 1.0f)));
 }
 
+void Controller::halt() {
+  _esc1.writeMicroseconds(1000);
+  _esc2.writeMicroseconds(1000);
+  _esc3.writeMicroseconds(1000);
+  _esc4.writeMicroseconds(1000);
+}
+
 void Controller::addWaypoint(float x, float y, float z) {
   _posPID.addWaypoint(x, y, z);
 }
