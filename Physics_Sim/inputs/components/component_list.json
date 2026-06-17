@@ -1,0 +1,75 @@
+{
+    "_instructions": {
+        "overview": "List every component of your quad. The sim computes total mass and center-of-mass from this list.",
+        "geometry": "For 3D-printed parts, drop your .3mf or .stl file into inputs/stl/ and reference it here. The sim will read geometry, infill density, and material automatically from the .3mf slicer config.",
+        "3mf_fields": {
+            "file_3mf": "Filename of the .3mf export from your slicer (PrusaSlicer, BambuStudio, OrcaSlicer, Cura all supported).",
+            "material": "Fallback material if not auto-detected: PLA, PETG, ABS, ASA, TPU, NYLON, PETG-CF, PLA-CF",
+            "infill_percent": "Fallback infill % if not auto-detected (e.g. 20). Set explicitly if you used different infill for different parts.",
+            "wall_factor": "Fraction of part volume that is solid shell regardless of infill (default 0.25). Increase for parts with many perimeters."
+        },
+        "stl_fields": {
+            "stl_file": "Fallback if no .3mf is available. Requires manual material_density_kg_m3.",
+            "material_density_kg_m3": "Effective printed density. For 20% PLA infill: ~450. For solid PLA: 1240."
+        },
+        "position_m": "+x=forward, +y=left, +z=up in meters from the geometric center of the frame.",
+        "mass_g": "Used only if no geometry file is provided (e.g. bought components). Set to null if mass is computed from the 3mf/stl."
+    },
+    "components": [
+        {
+            "name": "frame",
+            "_note": "3D-printed frame. Drop frame.3mf into inputs/stl/ — infill and material auto-read from slicer config.",
+            "mass_g": null,
+            "position_m": [0.0, 0.0, 0.0],
+            "file_3mf": "frame.3mf",
+            "material": "PLA",
+            "infill_percent": null,
+            "wall_factor": 0.25,
+            "rotation_deg": [0.0, 0.0, 0.0]
+        },
+        {
+            "name": "motor_fl",
+            "_note": "Front-left motor (bought part, no geometry file needed)",
+            "mass_g": 28,
+            "position_m": [0.08, 0.08, 0.0]
+        },
+        {
+            "name": "motor_fr",
+            "mass_g": 28,
+            "position_m": [0.08, -0.08, 0.0]
+        },
+        {
+            "name": "motor_rl",
+            "mass_g": 28,
+            "position_m": [-0.08, 0.08, 0.0]
+        },
+        {
+            "name": "motor_rr",
+            "mass_g": 28,
+            "position_m": [-0.08, -0.08, 0.0]
+        },
+        {
+            "name": "esc_set",
+            "_note": "4x ESC, treat as a single mass near center",
+            "mass_g": 40,
+            "position_m": [0.0, 0.0, 0.0]
+        },
+        {
+            "name": "battery",
+            "_note": "3S LiPo, typically mounted on bottom of frame",
+            "mass_g": 180,
+            "position_m": [0.0, 0.0, -0.02]
+        },
+        {
+            "name": "flight_controller",
+            "mass_g": 8,
+            "position_m": [0.0, 0.0, 0.01]
+        },
+        {
+            "name": "camera_or_other",
+            "_note": "Add/remove entries as needed. Remove this one if unused.",
+            "mass_g": 15,
+            "position_m": [0.05, 0.0, 0.01]
+        }
+    ]
+}

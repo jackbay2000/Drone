@@ -1,0 +1,317 @@
+===================================================================
+  QUADCOPTER PHYSICS SIMULATION — USAGE GUIDE
+===================================================================
+
+QUICK START
+-----------
+  .venv\Scripts\python.exe main.py
+
+First run uses placeholder vehicle parameters (500g, 5" class quad).
+Add your real parts progressively — the sim picks them up automatically.
+
+
+RUNNING SCENARIOS
+-----------------
+  python main.py --scenario hover          10s altitude hold (default)
+  python main.py --scenario step_roll      20° roll step at t=3s
+  python main.py --scenario step_pitch     20° pitch step at t=3s
+  python main.py --scenario yaw_spin       Continuous 90°/s yaw
+  python main.py --scenario altitude_step  Climb from 1m to 2m
+
+  python main.py --scenario waypoints            Fly a CSV waypoint mission
+
+Timestep (default 2ms, smaller = more accurate but slower):
+  python main.py --scenario hover --dt 0.001
+
+Use a custom waypoint file:
+  python main.py --scenario waypoints --waypoints my_mission.csv
+
+
+===================================================================
+  WAYPOINTS SCENARIO
+===================================================================
+
+The waypoints scenario is how you simulate the real flight missions
+you plan to send to the drone. It uses the same CSV format you will
+eventually feed to the real vehicle.
+
+--- Waypoint file format ---
+
+  inputs/waypoints/waypoints.csv  (default location)
+  or any .csv passed via --waypoints
+
+Columns: x_m, y_m, z_m, keep_heading
+  x_m, y_m, z_m   Position in the WORLD frame (metres)
+                   Origin = takeoff location
+  keep_heading     true  → maintain yaw = 0° (nose always faces world +x)
+                   false → automatically yaw to face the next waypoint
+
+Lines starting with # are comments and are ignored.
+
+Example:
+  0.0, 0.0, 1.0, true     # takeoff / hover
+  3.0, 0.0, 1.5, false    # fly forward; nose turns toward next WP
+  3.0, 3.0, 1.5, false    # turn left; nose turns toward next WP
+  0.0, 3.0, 1.2, true     # lock heading to 0° for the return leg
+  0.0, 0.0, 1.0, true     # return home
+
+--- World frame ---
+
+  +x = forward (the direction the drone faces at takeoff)
+  +y = left
+  +z = up
+  Origin is wherever the drone sits at the start of the simulation.
+
+Waypoints are visited in order. The drone must come within 0.5 m (3D)
+of a waypoint before advancing to the next one.
+
+--- Yaw behaviour ---
+
+  keep_heading = true:  yaw is locked to 0°, so the nose always
+                        points in the +x direction regardless of
+                        which way the drone is flying.
+
+  keep_heading = false: the drone automatically yaws to face the
+                        direction of the NEXT waypoint before it
+                        arrives. This gives it time to turn before
+                        needing to fly the next leg.
+
+The last waypoint always uses its own keep_heading setting for the
+final position hold once the mission is complete.
+
+--- Progress output ---
+
+The waypoints scenario prints a status table every 5 seconds:
+  t(s)  WP   x      y      z   roll  pitch  yaw
+so you can watch the drone work through the mission without opening
+the plot window until it finishes.
+
+
+===================================================================
+  DROP-IN FOLDERS
+===================================================================
+
+inputs/stl/
+  Drop any .stl OR .3mf files from your CAD/slicer here.
+  .3mf is strongly preferred: the sim reads infill density and
+  material automatically from the slicer config inside the file.
+  Supported slicers: PrusaSlicer, BambuStudio, OrcaSlicer, Cura.
+
+inputs/components/component_list.json
+  Tell the sim what parts you have and where they sit.
+  Edit this file — see the COMPONENT LIST section below.
+
+inputs/controller/
+  Drop your .ino / .cpp / .h files here.
+  The sim scans them for PID gain variable names (kp_roll, Ki_pitch,
+  etc.) and uses those gains. Unrecognised names fall back to defaults.
+  No code changes needed when your controller evolves.
+
+
+===================================================================
+  COMPONENT LIST — HOW TO SPECIFY PARTS
+===================================================================
+
+Open: inputs/components/component_list.json
+
+Each entry describes one physical component. Example entries:
+
+--- Bought part (motor, battery, ESC) ---
+{
+    "name": "battery",
+    "mass_g": 180,
+    "position_m": [0.0, 0.0, -0.025]
+}
+
+For bought parts, position_m is the CENTER OF MASS of that part in the
+body frame. See COORDINATE SYSTEM section below.
+
+--- 3D-printed part with .3mf file (RECOMMENDED) ---
+{
+    "name": "frame",
+    "mass_g": null,
+    "position_m": [0.0, 0.0, 0.0],
+    "file_3mf": "frame.3mf",
+    "material": "PLA",
+    "infill_percent": null,
+    "wall_factor": 0.25,
+    "rotation_deg": [0.0, 0.0, 0.0]
+}
+
+  mass_g:         Set to null — mass is computed from the mesh geometry
+                  and effective print density automatically.
+  file_3mf:       Filename of the .3mf export from your slicer
+                  (drop the file into inputs/stl/).
+  material:       Fallback if not found in file. Options:
+                    PLA, PETG, ABS, ASA, TPU, NYLON, PETG-CF, PLA-CF
+  infill_percent: Fallback if not found in file (e.g. 20).
+                  Leave null to read from slicer config automatically.
+  wall_factor:    What fraction of the part is solid shell regardless
+                  of infill. Default 0.25 (25%) suits 2-3 perimeters.
+                  Increase to 0.35-0.40 for very thick-walled parts.
+  rotation_deg:   See ROTATION section below.
+
+--- 3D-printed part with .stl file (fallback) ---
+{
+    "name": "canopy",
+    "mass_g": null,
+    "position_m": [0.0, 0.0, 0.02],
+    "stl_file": "canopy.stl",
+    "material_density_kg_m3": 450
+}
+
+  material_density_kg_m3: You must set this manually for STL files
+  since STL has no print settings. Approximate values:
+    PLA  15% infill ~ 380 kg/m³
+    PLA  20% infill ~ 435 kg/m³
+    PLA  40% infill ~ 620 kg/m³
+    PLA solid       ~ 1240 kg/m³
+  Rule of thumb: 1240 × (infill% / 100) as a conservative estimate.
+
+
+===================================================================
+  COORDINATE SYSTEM (body frame)
+===================================================================
+
+The body frame is fixed to the drone. Its origin is the geometric
+center of the frame — the point at the intersection of the diagonals
+drawn between opposite motor mounts.
+
+         +x (forward / nose)
+          |
+  +y ----[O]---- -y (right)
+  (left)  |
+         -x (rear)
+
+         +z = UP (out of the top of the drone)
+
+Use this system for ALL position_m values in component_list.json.
+
+Examples:
+  Battery on underside, centered, 25mm below frame:  [0.0,  0.0, -0.025]
+  FC on top, centered, 10mm above frame:             [0.0,  0.0,  0.010]
+  Camera on nose, centered, 50mm forward:            [0.050, 0.0,  0.005]
+  Front-left motor arm, 80mm out each way:           [0.080, 0.080, 0.0]
+
+
+===================================================================
+  EXPORTING FROM SOLIDWORKS FOR USE HERE
+===================================================================
+
+To get the best results from .3mf / .stl geometry:
+
+1. In SolidWorks, set the model origin to the CENTER of the frame
+   (center of the motor-mount cross pattern). This makes position_m
+   = [0, 0, 0] for the frame with no offset needed.
+
+2. Orient your model so that:
+     Front of drone  = +X direction in SolidWorks
+     Left side       = +Y direction
+     Top             = +Z direction
+
+3. Export → Save As → 3MF (preferred) or STL.
+   Slice the 3MF in your slicer and re-export so the slicer config
+   (infill %, material) is embedded.
+
+If your SolidWorks coordinate system differs, use rotation_deg in the
+component entry to realign it. See ROTATION section.
+
+
+===================================================================
+  ROTATION — rotation_deg field
+===================================================================
+
+rotation_deg: [rx, ry, rz]
+
+This rotates the mesh from its CAD export orientation into the body
+frame (described above) before computing center of mass and inertia.
+
+Rotations are Euler angles in degrees, applied in X→Y→Z order
+(extrinsic / fixed-axis).
+
+Common corrections:
+  Your SolidWorks X axis points LEFT instead of forward:
+    rotation_deg: [0, 0, -90]   (rotate -90° about Z)
+
+  Your model is upside-down (Z points down in SolidWorks):
+    rotation_deg: [180, 0, 0]   (flip about X)
+
+  SolidWorks Y is forward, Z is up (common default):
+    rotation_deg: [0, 0, -90]   (swap X and Y by rotating -90° about Z)
+
+position_m with geometry files:
+  When a .3mf or .stl is provided, position_m is the location of the
+  MESH ORIGIN (0,0,0 of the exported file) in the body frame.
+  The true center of mass is computed as:
+    CoM = position_m + (rotation applied to mesh_center_from_file)
+
+  For the main frame: position_m = [0, 0, 0] (the mesh origin IS the
+  body frame origin if you exported from the frame center).
+  For a sub-assembly exported separately at its own origin, set
+  position_m to where that origin sits on the vehicle.
+
+
+===================================================================
+  CONTROLLER CODE (inputs/controller/)
+===================================================================
+
+Drop your .ino file(s) here. The parser looks for variables whose
+names contain recognisable keywords:
+
+  Axis keywords:   roll / phi / x,   pitch / theta / y,
+                   yaw / psi,         alt / altitude / z
+  Term keywords:   kp / P,  ki / I,  kd / D,  rate
+
+Examples that are automatically detected:
+  float kp_roll  = 2.5;       → kp_rr  (roll rate P gain)
+  double Ki_pitch = 0.05;     → ki_pr  (pitch rate I gain)
+  #define KD_YAW 0.0          → kd_yr  (yaw rate D gain)
+  rollPID.Kp = 3.0;           → kp_rr
+  float kp_alt = 4.0;         → kp_alt (altitude P gain)
+
+The parser is intentionally fuzzy — you don't need to rename your
+variables. If a variable is not matched, the sim uses the default
+conservative gain for that slot and prints a warning.
+
+To check what was parsed:
+  .venv\Scripts\python.exe -c "from controller.arduino_parser import parse_gains; parse_gains()"
+
+
+===================================================================
+  TUNING WORKFLOW
+===================================================================
+
+1. Run with defaults first:
+     python main.py --scenario hover
+   The drone should hover stably (altitude error < 5cm). If it
+   diverges, the default PID gains need adjustment.
+
+2. Drop in your component list to get accurate mass / CoM:
+     Edit inputs/components/component_list.json
+
+3. Drop in your .3mf files for printed parts for accurate inertia.
+
+4. Drop in your .ino to test your actual gains:
+     python main.py --scenario step_roll
+   A well-tuned roll step should settle to 20° in < 1s with < 20%
+   overshoot, then return cleanly to level.
+
+5. Tune PID gains in your Arduino code, re-drop the .ino, re-run.
+   No Python code changes needed between iterations.
+
+
+===================================================================
+  DEPENDENCIES
+===================================================================
+
+Activate the virtual environment first:
+  .venv\Scripts\activate        (Windows)
+
+Core (already installed):
+  numpy, scipy, matplotlib
+
+Optional (for STL/3MF geometry loading):
+  .venv\Scripts\python.exe -m pip install trimesh
+
+If trimesh is missing the sim still runs using point-mass
+approximations from the mass and position values in component_list.json.

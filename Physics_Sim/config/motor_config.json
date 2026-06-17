@@ -1,0 +1,16 @@
+{
+    "_comment": "2205 2300KV + 5045 prop on 3S. Thrust curve fit from Emax RS2205S/Gemfan 5045 4S data, scaled to 3S (11.1V).",
+    "motor_kv": 2300,
+    "battery_cells": 3,
+    "battery_voltage_nominal": 11.1,
+    "prop_diameter_m": 0.127,
+    "prop_pitch_m": 0.1143,
+    "thrust_curve": {
+        "_comment": "T [Newtons] = a*u^2 + b*u, where u is throttle in [0,1]",
+        "a": 5.43,
+        "b": 2.15
+    },
+    "torque_ratio": 0.016,
+    "time_constant_s": 0.05,
+    "max_current_A": 30.0
+}

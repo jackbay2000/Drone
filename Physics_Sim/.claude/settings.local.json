@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "PowerShell(python3 --version 2>$null)",
+      "PowerShell(py --version 2>$null)",
+      "PowerShell(python3 -c \"import numpy, scipy, matplotlib; print\\('deps OK'\\)\" 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\jbay\\\\.local\\\\bin\\\\python3.14.exe\" -c \"import sys; print\\(sys.version\\); import numpy, scipy, matplotlib; print\\('deps OK'\\)\" 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\jbay\\\\.local\\\\bin\\\\python3.14.exe\" -m pip install numpy scipy matplotlib 2>&1)",
+      "PowerShell(uv --version 2>$null)",
+      "WebFetch(domain:radagast.ca)",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\jbay\\\\Desktop\\\\Service-Bot\\\\Physics_Sim\\\\inputs\\\\waypoints\")"
+    ]
+  }
+}
