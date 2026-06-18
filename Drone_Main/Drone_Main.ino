@@ -109,6 +109,12 @@ void loop() {
   }
 
   // ── Normal flight ─────────────────────────────────────────────────────────
+  static unsigned long lastLoop = 0;
+  static constexpr unsigned long LOOP_PERIOD_US = 4000; // 250 Hz
+  unsigned long now = micros();
+  if (now - lastLoop < LOOP_PERIOD_US) return;
+  lastLoop = now;
+
   imu.update();
   position.update(imu, flow, rangefinder);
   controller.update(imu, position);

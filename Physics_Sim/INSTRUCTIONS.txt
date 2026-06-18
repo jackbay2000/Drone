@@ -138,6 +138,21 @@ body frame. See COORDINATE SYSTEM section below.
     "rotation_deg": [0.0, 0.0, 0.0]
 }
 
+  IMPORTANT: For parts with a geometry file (.3mf or .stl), position_m
+  means something DIFFERENT than for bought parts:
+
+    Bought part:    position_m = center of mass of the part
+    Geometry part:  position_m = where the MESH ORIGIN (0,0,0 of the
+                    exported file) sits in the body frame. The sim
+                    computes the true center of mass automatically:
+                      CoM = position_m + R @ mesh_center_from_geometry
+
+  If you exported your frame with its origin at the center of the
+  motor-mount cross pattern (recommended), then position_m = [0,0,0]
+  and no offset is needed. If a sub-part was exported with its own
+  local origin (e.g. a camera mount modeled separately), set
+  position_m to where that part's origin sits on the assembled drone.
+
   mass_g:         Set to null — mass is computed from the mesh geometry
                   and effective print density automatically.
   file_3mf:       Filename of the .3mf export from your slicer
@@ -185,13 +200,22 @@ drawn between opposite motor mounts.
 
          +z = UP (out of the top of the drone)
 
-Use this system for ALL position_m values in component_list.json.
+All position_m values in component_list.json are specified in this
+frame. Note: what position_m refers to depends on the component type:
+  - Bought parts (no geometry file): position_m = center of mass
+  - Geometry parts (.3mf / .stl):    position_m = mesh origin (0,0,0
+    of the exported file). CoM is computed from the mesh automatically.
 
-Examples:
+Examples (bought parts — center of mass positions):
   Battery on underside, centered, 25mm below frame:  [0.0,  0.0, -0.025]
   FC on top, centered, 10mm above frame:             [0.0,  0.0,  0.010]
   Camera on nose, centered, 50mm forward:            [0.050, 0.0,  0.005]
   Front-left motor arm, 80mm out each way:           [0.080, 0.080, 0.0]
+
+Example (geometry part — mesh origin position):
+  Frame exported with origin at frame center:        [0.0,  0.0,  0.0]
+  Sub-part exported at its own origin, mounted
+    30mm forward and 15mm above frame center:        [0.030, 0.0,  0.015]
 
 
 ===================================================================
@@ -240,15 +264,9 @@ Common corrections:
     rotation_deg: [0, 0, -90]   (swap X and Y by rotating -90° about Z)
 
 position_m with geometry files:
-  When a .3mf or .stl is provided, position_m is the location of the
-  MESH ORIGIN (0,0,0 of the exported file) in the body frame.
-  The true center of mass is computed as:
-    CoM = position_m + (rotation applied to mesh_center_from_file)
-
-  For the main frame: position_m = [0, 0, 0] (the mesh origin IS the
-  body frame origin if you exported from the frame center).
-  For a sub-assembly exported separately at its own origin, set
-  position_m to where that origin sits on the vehicle.
+  See the IMPORTANT note in the COMPONENT LIST section above.
+  In short: position_m is where the mesh origin sits in the body
+  frame, NOT the center of mass. The sim computes CoM from geometry.
 
 
 ===================================================================
