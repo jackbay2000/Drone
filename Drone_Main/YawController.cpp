@@ -10,14 +10,7 @@ void YawController::setup(float kp_yaw, float ki_yaw, float kd_yaw) {
 
 float YawController::update(IMU& imu, float desiredYaw, float dt) {
   float err = desiredYaw - imu.getYaw();
-
-  // Wrap into [-π, π] so the drone always takes the shortest rotation path
   while (err >  3.14159f) err -= 6.28318f;
   while (err < -3.14159f) err += 6.28318f;
-
   return _pidYaw.compute(err, imu.getYaw(), dt);
-}
-
-void YawController::reset() {
-  _pidYaw.reset();
 }

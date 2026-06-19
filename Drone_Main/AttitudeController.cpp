@@ -11,23 +11,11 @@ void AttitudeController::setup(float kp_roll,  float ki_roll,  float kd_roll,
 }
 
 AttitudeOutput AttitudeController::update(IMU& imu, float cvX, float cvY, float dt) {
-  // Forward command becomes desired pitch — a positive pitch tilts the nose down,
-  // generating thrust in the forward direction.
-  // Left command is inverted for roll — rolling left (negative roll) shifts lift
-  // leftward and moves the drone in the +Y direction.
   float desiredPitch = cvX;
   float desiredRoll  = -cvY;
 
-  float rollErr  = desiredRoll  - imu.getRoll();
-  float pitchErr = desiredPitch - imu.getPitch();
-
   AttitudeOutput out;
-  out.roll  = _pidRoll .compute(rollErr,  imu.getRoll(),  dt);
-  out.pitch = _pidPitch.compute(pitchErr, imu.getPitch(), dt);
+  out.roll  = _pidRoll .compute(desiredRoll  - imu.getRoll(),  imu.getRoll(),  dt);
+  out.pitch = _pidPitch.compute(desiredPitch - imu.getPitch(), imu.getPitch(), dt);
   return out;
-}
-
-void AttitudeController::reset() {
-  _pidRoll .reset();
-  _pidPitch.reset();
 }
