@@ -13,15 +13,17 @@ PWMServo esc;
 void setup() {
   Serial.begin(115200);
 
-  esc.attach(ESC_PIN);
-  esc.write(PWM_MIN);   // arm
+  esc.attach(ESC_PIN, PWM_MIN, PWM_MAX);  // 0 deg -> PWM_MIN us, 180 deg -> PWM_MAX us
+  esc.write(0);   // arm at zero throttle
   delay(3000);
 }
 
 void loop() {
   if (!Serial.available()) return;
 
-  //int pct = constrain(Serial.parseInt(), 0, 100);
-  //int us = map(pct, 0, 100, PWM_MIN, PWM_MAX);
-  esc.write(1000);
+  int pct = constrain(Serial.parseInt(), 0, 100);
+  int angle = map(pct, 0, 100, 0, 180);
+  esc.write(angle);
+
+  Serial.println(pct);
 }
