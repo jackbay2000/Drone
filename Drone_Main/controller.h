@@ -1,6 +1,6 @@
 #pragma once
 #include "main.h"
-#include <Servo.h>
+#include <PWMServo.h>
 #include "PositionPID.h"
 #include "AttitudeController.h"
 #include "YawController.h"
@@ -18,7 +18,7 @@ private:
   AttitudeController _attCtrl;
   YawController      _yawCtrl;
 
-  Servo _esc[4];
+  PWMServo _esc[4];
 
   static constexpr float HOVER_THROTTLE = 0.5f;
   static constexpr float POSITION_HZ    = 25.0f;
