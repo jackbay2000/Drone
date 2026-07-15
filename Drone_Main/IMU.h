@@ -37,6 +37,9 @@ private:
   float _yaw   = 0.0f;
   float _gRate[3] = {};
 
+  float _rollOffset  = 0.0f;
+  float _pitchOffset = 0.0f;
+
   float   _accelRollBuf[3]  = {};
   float   _accelPitchBuf[3] = {};
   uint8_t _accelBufIdx      = 0;

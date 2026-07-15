@@ -82,12 +82,14 @@ void IMU::setup() {
   float ay_avg = FLOW_Y_SIGN * (float)(sa[0] / N);  // flow Y = IMU X
   float az_avg =               (float)(sa[2] / N);  // flow Z = IMU Z
 
-  _roll  = atan2f(ay_avg, az_avg);
-  _pitch = atan2f(-ax_avg, sqrtf(ay_avg * ay_avg + az_avg * az_avg));
+  _rollOffset  = atan2f(ay_avg, az_avg);
+  _pitchOffset = atan2f(-ax_avg, sqrtf(ay_avg * ay_avg + az_avg * az_avg));
+  _roll  = 0.0f;
+  _pitch = 0.0f;
   _yaw   = 0.0f;
 
-  Serial.print("Calibration done.  Roll: ");  Serial.print(degrees(_roll),  1);
-  Serial.print(" deg   Pitch: "); Serial.print(degrees(_pitch), 1); Serial.println(" deg");
+  Serial.print("Calibration done.  Mounting offset — Roll: ");  Serial.print(degrees(_rollOffset),  1);
+  Serial.print(" deg   Pitch: "); Serial.print(degrees(_pitchOffset), 1); Serial.println(" deg");
 
   _lastMicros = micros();
 }
@@ -124,8 +126,8 @@ void IMU::update() {
   _accelPitchBuf[_accelBufIdx] = atan2f(-a_x, sqrtf(a_y*a_y + a_z*a_z));
   _accelBufIdx = (_accelBufIdx + 1) % 3;
 
-  float accelRoll  = median3(_accelRollBuf[0],  _accelRollBuf[1],  _accelRollBuf[2]);
-  float accelPitch = median3(_accelPitchBuf[0], _accelPitchBuf[1], _accelPitchBuf[2]);
+  float accelRoll  = median3(_accelRollBuf[0],  _accelRollBuf[1],  _accelRollBuf[2])  - _rollOffset;
+  float accelPitch = median3(_accelPitchBuf[0], _accelPitchBuf[1], _accelPitchBuf[2]) - _pitchOffset;
 
   _roll  = alpha * (_roll  + _gRate[0] * dt) + (1.0f - alpha) * accelRoll;
   _pitch = alpha * (_pitch + _gRate[1] * dt) + (1.0f - alpha) * accelPitch;
