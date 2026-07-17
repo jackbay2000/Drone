@@ -1,17 +1,18 @@
 #pragma once
 
 // ---------------------------------------------------------------------------
-// Servo stub — records writeMicroseconds() calls so the bridge can read
+// PWMServo stub — records writeMicroseconds() calls so the bridge can read
 // ESC output values back out and convert them to normalized [0, 1].
+// Shadows Teensy/Arduino's <PWMServo.h> (included by Drone_Main/controller.h).
 // ---------------------------------------------------------------------------
 
 #define MAX_SERVOS 8
 extern int _servo_values[MAX_SERVOS];
 extern int _servo_count;
 
-class Servo {
+class PWMServo {
 public:
-    Servo() : _index(-1) {}
+    PWMServo() : _index(-1) {}
 
     void attach(int /*pin*/, int /*min_us*/ = 544, int /*max_us*/ = 2400) {
         _index = _servo_count;

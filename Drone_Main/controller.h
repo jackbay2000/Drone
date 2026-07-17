@@ -10,7 +10,7 @@ public:
   Controller();
 
   void setup(const Gains& g);
-  void update(IMU& imu, Position& pos, float tx, float ty, float tz);
+  void update(IMU& imu, Position& pos, float tx, float ty, float tz, float targetYaw);
   void halt();
 
 private:

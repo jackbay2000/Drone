@@ -2,13 +2,16 @@
 # Columns: x_m, y_m, z_m, keep_heading
 #
 # keep_heading = True  → maintain yaw = 0 (nose always faces +x / forward)
-# keep_heading = False → yaw to face the next waypoint automatically
+# keep_heading = False → nose turns to face this leg's target
 #
 # Positions are in the world frame: +x=forward, +y=left, +z=up
 # Origin = takeoff point
+#
+# A waypoint with z = 0 lands and ends the mission -- keep one last.
 
   0.0,  0.0,  1.0,  True    # takeoff / hover
   3.0,  0.0,  1.5,  False   # fly forward, nose tracks direction of travel
   3.0,  3.0,  1.5,  False   # turn left
   0.0,  3.0,  1.2,  True    # lock heading back to 0 for return leg
   0.0,  0.0,  1.0,  True    # return home
+  0.0,  0.0,  0.0,  True    # land

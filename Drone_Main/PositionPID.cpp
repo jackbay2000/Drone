@@ -16,9 +16,8 @@ void PositionPID::setup(float kp_x, float ki_x, float kd_x,
 ControlVector PositionPID::update(float tx, float ty, float tz,
                                   float px, float py, float pz, float dt) {
   ControlVector cv;
-  cv.x   = _pidX.compute(tx - px, px, dt);
-  cv.y   = _pidY.compute(ty - py, py, dt);
-  cv.z   = _pidZ.compute(tz - pz, pz, dt);
-  cv.yaw = _desiredYaw;
+  cv.x = _pidX.compute(tx - px, px, dt);
+  cv.y = _pidY.compute(ty - py, py, dt);
+  cv.z = _pidZ.compute(tz - pz, pz, dt);
   return cv;
 }

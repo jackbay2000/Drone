@@ -162,7 +162,7 @@ def _get_lib(verbose: bool = True) -> ctypes.CDLL:
     lib.sim_set_gains.argtypes = [ctypes.c_float] * 18
 
     lib.sim_add_waypoint.restype  = None
-    lib.sim_add_waypoint.argtypes = [ctypes.c_float, ctypes.c_float, ctypes.c_float]
+    lib.sim_add_waypoint.argtypes = [ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_int]
 
     lib.sim_clear_waypoints.restype  = None
     lib.sim_clear_waypoints.argtypes = []
@@ -189,19 +189,19 @@ class DroneController(BaseController):
     """
     Wraps the compiled Drone_Main Controller via ctypes.
 
-    The sim loop calls update(state, dt) exactly as Drone_Main.ino calls
-    controller.update(imu, position) — state is split into sensor fields,
+    The sim loop calls update(state, dt); state is split into sensor fields,
     the clock is advanced, and ESC outputs are read back as [0,1] commands.
 
-    add_waypoint / clear_waypoints / mission_complete mirror the Drone_Main
-    Controller API directly.
+    add_waypoint / clear_waypoints / mission_complete are implemented in
+    cpp_bridge/sim_bridge.cpp, mirroring Drone_Main.ino's own waypoint
+    sequencing loop (Controller itself only flies toward a single target).
     """
 
     def __init__(self, engine, gains: dict = None):
         self._engine    = engine
         self._lib       = _get_lib()
         self._gains     = gains or {}
-        self._waypoints: list[tuple[float, float, float]] = []
+        self._waypoints: list[tuple[float, float, float, bool]] = []
         self._motor_buf = (ctypes.c_float * 4)()
         self._setup_dll()
 
@@ -218,15 +218,17 @@ class DroneController(BaseController):
             g.get('kp_y',     0.25),  g.get('ki_y',     0.005), g.get('kd_y',     0.15),
             g.get('kp_z',     0.40),  g.get('ki_z',     0.02),  g.get('kd_z',     0.20),
         )
-        for wx, wy, wz in self._waypoints:
+        for wx, wy, wz, wh in self._waypoints:
             self._lib.sim_add_waypoint(
-                ctypes.c_float(wx), ctypes.c_float(wy), ctypes.c_float(wz))
+                ctypes.c_float(wx), ctypes.c_float(wy), ctypes.c_float(wz),
+                ctypes.c_int(1 if wh else 0))
 
     # ------------------------------------------------------------------
-    def add_waypoint(self, x: float, y: float, z: float):
-        self._waypoints.append((float(x), float(y), float(z)))
+    def add_waypoint(self, x: float, y: float, z: float, keep_heading: bool = True):
+        self._waypoints.append((float(x), float(y), float(z), bool(keep_heading)))
         self._lib.sim_add_waypoint(
-            ctypes.c_float(x), ctypes.c_float(y), ctypes.c_float(z))
+            ctypes.c_float(x), ctypes.c_float(y), ctypes.c_float(z),
+            ctypes.c_int(1 if keep_heading else 0))
 
     def clear_waypoints(self):
         self._waypoints.clear()

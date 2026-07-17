@@ -23,7 +23,7 @@ void Controller::setup(const Gains& g) {
   _lastMicros = _lastPositionMicros = micros();
 }
 
-void Controller::update(IMU& imu, Position& pos, float tx, float ty, float tz) {
+void Controller::update(IMU& imu, Position& pos, float tx, float ty, float tz, float targetYaw) {
   unsigned long now = micros();
   float dt = (now - _lastMicros) * 1.0e-6f;
   _lastMicros = now;
@@ -34,6 +34,8 @@ void Controller::update(IMU& imu, Position& pos, float tx, float ty, float tz) {
     return;
   }
 
+  _cvYaw = targetYaw;
+
   // Position loop at POSITION_HZ
   float dt_pos = (now - _lastPositionMicros) * 1.0e-6f;
   if (dt_pos >= 1.0f / POSITION_HZ) {
@@ -42,7 +44,6 @@ void Controller::update(IMU& imu, Position& pos, float tx, float ty, float tz) {
                                       pos.getX(), pos.getY(), pos.getZ(), dt_pos);
     _cvX          = cv.x;
     _cvY          = cv.y;
-    _cvYaw        = cv.yaw;
     _baseThrottle = _clamp(HOVER_THROTTLE + cv.z, 0.0f, 1.0f);
   }
 

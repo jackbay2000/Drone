@@ -1,7 +1,7 @@
 #pragma once
 #include "PID.h"
 
-struct ControlVector { float x, y, z, yaw; };
+struct ControlVector { float x, y, z; };
 
 class PositionPID {
 public:
@@ -16,6 +16,5 @@ public:
 
 private:
   PID _pidX, _pidY, _pidZ;
-  static constexpr float MAX_TILT = 0.35f;
-  float _desiredYaw = 0.0f;
+  static constexpr float MAX_TILT = 0.1396f;   // ~8 deg -- slow/trackable flight cap
 };

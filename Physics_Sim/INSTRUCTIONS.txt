@@ -32,8 +32,12 @@ Use a custom waypoint file:
 ===================================================================
 
 The waypoints scenario is how you simulate the real flight missions
-you plan to send to the drone. It uses the same CSV format you will
-eventually feed to the real vehicle.
+you plan to fly. The fields (x, y, z, keep_heading) and the flight
+behavior (arrival radius, heading logic, landing) exactly match
+Drone_Main's mission format — see Drone_Main/Waypoints.h, which is
+the file you actually edit to fly this mission on the real vehicle
+(Arduino has no filesystem to read a CSV from at runtime, so the
+mission there is a small hand-edited C++ array instead).
 
 --- Waypoint file format ---
 
@@ -50,10 +54,11 @@ Lines starting with # are comments and are ignored.
 
 Example:
   0.0, 0.0, 1.0, true     # takeoff / hover
-  3.0, 0.0, 1.5, false    # fly forward; nose turns toward next WP
-  3.0, 3.0, 1.5, false    # turn left; nose turns toward next WP
+  3.0, 0.0, 1.5, false    # fly forward; nose turns to face this leg
+  3.0, 3.0, 1.5, false    # turn left; nose turns to face this leg
   0.0, 3.0, 1.2, true     # lock heading to 0° for the return leg
   0.0, 0.0, 1.0, true     # return home
+  0.0, 0.0, 0.0, true     # land (z=0 cuts motors, ends the mission)
 
 --- World frame ---
 
@@ -62,7 +67,7 @@ Example:
   +z = up
   Origin is wherever the drone sits at the start of the simulation.
 
-Waypoints are visited in order. The drone must come within 0.5 m (3D)
+Waypoints are visited in order. The drone must come within 0.15 m (3D)
 of a waypoint before advancing to the next one.
 
 --- Yaw behaviour ---
@@ -71,13 +76,19 @@ of a waypoint before advancing to the next one.
                         points in the +x direction regardless of
                         which way the drone is flying.
 
-  keep_heading = false: the drone automatically yaws to face the
-                        direction of the NEXT waypoint before it
-                        arrives. This gives it time to turn before
-                        needing to fly the next leg.
+  keep_heading = false: as soon as this waypoint becomes the active
+                        target, the drone turns to face it — the
+                        heading is the bearing from the previous
+                        waypoint (or takeoff point) to this one, set
+                        once per leg so it has the whole leg to turn
+                        and doesn't jitter as it nears arrival.
 
-The last waypoint always uses its own keep_heading setting for the
-final position hold once the mission is complete.
+--- Landing ---
+
+  A waypoint with z = 0 is a landing waypoint: on arrival the motors
+  cut and the mission ends (mission_complete becomes true). Without
+  one, the drone just holds position at the last waypoint forever —
+  put a z = 0 waypoint last if you want the mission to actually end.
 
 --- Progress output ---
 

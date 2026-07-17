@@ -1,20 +1,7 @@
 #pragma once
 #include "IMU.h"
-
-// ---------------------------------------------------------------------------
-// FlowSensor / Rangefinder stubs — only needed as parameter types for
-// Position::update(); the stub implementation ignores them.
-// ---------------------------------------------------------------------------
-class FlowSensor {
-public:
-    FlowSensor(int /*cs_pin*/) {}
-    void setup() {}
-};
-
-class Rangefinder {
-public:
-    void setup() {}
-};
+#include "FlowSensor.h"
+#include "Rangefinder.h"
 
 // ---------------------------------------------------------------------------
 // Position stub — x/y/z are injected from Python via sim_set_state() each step.

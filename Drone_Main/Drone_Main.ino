@@ -1,4 +1,5 @@
 #include "main.h"
+#include "Waypoints.h"
 
 IMU         imu;
 FlowSensor  flow(10);
@@ -14,23 +15,32 @@ static constexpr uint8_t KILL_SIG_PIN = 7;
 enum class DroneState : uint8_t { RUNNING, HALTED, RESETTING };
 static DroneState _state;
 
-// ── Waypoints ────────────────────────────────────────────────────────────────
-struct Waypoint { float x, y, z; };
-
-static const Waypoint FLIGHT_PATH[] = {
-  { 0.0f,  0.0f,  1.0f},   // takeoff: rise 1 m
-  { 2.0f,  0.0f,  1.0f},   // move 2 m forward
-  { 2.0f,  1.5f,  1.0f},   // move 1.5 m left
-  { 0.0f,  0.0f,  1.0f},   // return overhead
-  { 0.0f,  0.0f,  0.0f},   // land
-};
-static constexpr int   NUM_WAYPOINTS = sizeof(FLIGHT_PATH) / sizeof(FLIGHT_PATH[0]);
-static constexpr float WP_RADIUS     = 0.15f;
-
-static int  _currentWP = 0;
-static bool _landed    = false;
+// ── Mission state ────────────────────────────────────────────────────────────
+// FLIGHT_PATH / NUM_WAYPOINTS / WP_RADIUS come from Waypoints.h -- that's the
+// only file you need to edit to change the mission.
+static int   _currentWP = 0;
+static bool  _landed    = false;
+static float _legYaw    = 0.0f;   // heading target for the current leg
 
 // ── Init ─────────────────────────────────────────────────────────────────────
+
+// Sets _legYaw for the leg ending at FLIGHT_PATH[wpIndex]: locked to 0 if
+// that waypoint wants keepHeading, otherwise the bearing from the previous
+// waypoint (or takeoff origin) toward it -- computed once per leg so the
+// drone has the whole leg to turn, and doesn't jitter as it nears arrival.
+static void _startLeg(int wpIndex) {
+  const Waypoint& wp = FLIGHT_PATH[wpIndex];
+  if (wp.keepHeading) {
+    _legYaw = 0.0f;
+    return;
+  }
+  float fromX = (wpIndex == 0) ? 0.0f : FLIGHT_PATH[wpIndex - 1].x;
+  float fromY = (wpIndex == 0) ? 0.0f : FLIGHT_PATH[wpIndex - 1].y;
+  float dx = wp.x - fromX;
+  float dy = wp.y - fromY;
+  if (dx * dx + dy * dy > 1.0e-6f) _legYaw = atan2f(dy, dx);
+  // else: degenerate leg (e.g. pure altitude change) -- keep previous heading
+}
 
 static void doInit() {
   imu.setup();
@@ -40,6 +50,7 @@ static void doInit() {
   position.setup(imu, flow, rangefinder);
   _currentWP = 0;
   _landed    = false;
+  _startLeg(_currentWP);
   controller.setup(gains);
 }
 
@@ -126,12 +137,14 @@ void loop() {
     }
     if (_currentWP < NUM_WAYPOINTS - 1) {
       _currentWP++;
+      _startLeg(_currentWP);
     }
   }
 
   controller.update(imu, position,
                     FLIGHT_PATH[_currentWP].x,
                     FLIGHT_PATH[_currentWP].y,
-                    FLIGHT_PATH[_currentWP].z);
+                    FLIGHT_PATH[_currentWP].z,
+                    _legYaw);
   printTelemetry();
 }

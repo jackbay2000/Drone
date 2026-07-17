@@ -18,48 +18,54 @@
     "components": [
         {
             "name": "prop_arm_FL",
-            "_note": "TODO: FILL POSITION AND ORIENTATION",
-            "mass_g": null,
-            "position_m": [0.0, 0.0, 0.0],
-            "file_3mf": "prop_arm.3mf",
-            "material": "PLA",
-            "infill_percent": null,
-            "wall_factor": 0.25,
-            "rotation_deg": [0.0, 0.0, 0.0]
+            "_note": "propeller arm front left",
+            "mass_g": 36,
+            "position_m": [0.0689, 0.05683, -0.00965]
+        },
+        {
+            "name": "prop_arm_FR",
+            "_note": "propeller arm front right",
+            "mass_g": 36,
+            "position_m": [0.0689, -0.05683, -0.00965]
+        },
+        {
+            "name": "prop_arm_BL",
+            "_note": "propeller arm back left",
+            "mass_g": 36,
+            "position_m": [-0.0689, 0.05683, -0.00965]
+        },
+        {
+            "name": "prop_arm_BR",
+            "_note": "propeller arm back right",
+            "mass_g": 36,
+            "position_m": [-0.0689, -0.05683, -0.00965]
         },
         {
             "name": "motor_fl",
             "_note": "TODO: ADD MOTOR POSITIONS. Z CENTER IS AT SEPARATION POINT BETWEEN PROP AND BODY",
             "mass_g": 35,
-            "position_m": [0.08, 0.08, 0.0]
+            "position_m": [0.1151382, 0.1030732, 0.01778]
         },
         {
             "name": "motor_fr",
             "mass_g": 35,
-            "position_m": [0.08, -0.08, 0.0]
+            "position_m": [0.1151382, -0.1030732, 0.01778]
         },
         {
             "name": "motor_rl",
             "mass_g": 35,
-            "position_m": [-0.08, 0.08, 0.0]
+            "position_m": [-0.1151382, 0.1030732, 0.01778]
         },
         {
             "name": "motor_rr",
             "mass_g": 35,
-            "position_m": [-0.08, -0.08, 0.0]
+            "position_m": [-0.1151382, -0.1030732, 0.01778]
         },
-        
-
-
-
-
-
         {
             "name": "center_assembly",
             "_note": "center body which holds all circuitry, battery, and prop arms",
             "mass_g": 414,
             "position_m": [0.0, 0.0, 0.0]
         }
-        
     ]
 }

@@ -30,9 +30,12 @@ SIM_API void sim_set_gains(
 );
 
 // ---------------------------------------------------------------------------
-// Waypoints  (mirrors Controller::addWaypoint / clearWaypoints / isComplete)
+// Waypoints  (mirrors Drone_Main.ino's FLIGHT_PATH / _currentWP / _landed)
 // ---------------------------------------------------------------------------
-SIM_API void sim_add_waypoint(float x, float y, float z);
+// keep_heading: 1 = nose locked at takeoff heading (0 rad) for this leg,
+//               0 = nose turns to face this waypoint. A waypoint with z == 0
+//               is a landing: arrival cuts the motors and ends the mission.
+SIM_API void sim_add_waypoint(float x, float y, float z, int keep_heading);
 SIM_API void sim_clear_waypoints(void);
 SIM_API int  sim_mission_complete(void);   // 1 = done, 0 = flying
 
