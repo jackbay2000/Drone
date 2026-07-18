@@ -17,6 +17,7 @@ import platform
 import subprocess
 import sys
 import glob
+import shutil
 
 import numpy as np
 from controller.base_controller import BaseController
@@ -39,6 +40,18 @@ _DM_SOURCES = [
     'YawController.cpp',
     'PositionPID.cpp',
     'controller.cpp',
+]
+# Their headers, plus main.h (pulled in transitively by controller.h). Staged
+# into cpp_bridge/ alongside the stub headers before every build -- see the
+# comment in build() for why this has to be a real copy, not just another -I
+# path: quoted #includes ("IMU.h") resolve relative to the including file's
+# OWN directory first, before any -I search path is even considered, so
+# main.h (which lives in Drone_Main/) would always find the real, hardware-
+# dependent Drone_Main/IMU.h instead of cpp_bridge/IMU.h's stub no matter
+# what order -I flags are given in.
+_DM_HEADERS = [
+    'PID.h', 'AttitudeController.h', 'YawController.h', 'PositionPID.h',
+    'controller.h', 'main.h',
 ]
 
 
@@ -90,7 +103,19 @@ def build(force: bool = False, verbose: bool = True) -> bool:
             "  Then re-run the simulation."
         )
 
-    sources = [os.path.join(_DM_DIR, s) for s in _DM_SOURCES]
+    # Stage the pure-logic Drone_Main files directly into cpp_bridge/,
+    # alongside the stub headers, with copy2 (preserves source mtime, so
+    # _source_mtime() staleness checks still work correctly against the
+    # ORIGINAL Drone_Main files). This makes every quoted #include inside
+    # main.h/controller.h resolve to the stubs by construction, since they
+    # now physically share a directory with them -- see _DM_HEADERS above.
+    # These are build artifacts, not a second source of truth: never edit
+    # a *.cpp/*.h file inside cpp_bridge/ that also exists in Drone_Main/,
+    # edit Drone_Main/ and rebuild.
+    for fname in _DM_SOURCES + _DM_HEADERS:
+        shutil.copy2(os.path.join(_DM_DIR, fname), os.path.join(_BRIDGE_DIR, fname))
+
+    sources = [os.path.join(_BRIDGE_DIR, s) for s in _DM_SOURCES]
     sources.append(os.path.join(_BRIDGE_DIR, 'sim_bridge.cpp'))
 
     if compiler == 'msvc':
@@ -98,7 +123,7 @@ def build(force: bool = False, verbose: bool = True) -> bool:
         obj_dir = _BRIDGE_DIR
         cmd = [
             'cl', '/nologo', '/EHsc', '/O2', '/std:c++17',
-            f'/I{_BRIDGE_DIR}', f'/I{_DM_DIR}',
+            f'/I{_BRIDGE_DIR}',
             f'/Fo{obj_dir}{os.sep}',
             '/LD', f'/Fe:{_DLL_PATH}',
             *sources,
@@ -106,7 +131,13 @@ def build(force: bool = False, verbose: bool = True) -> bool:
     else:
         cmd = [
             'g++', '-shared', '-O2', '-std=c++17',
-            f'-I{_BRIDGE_DIR}', f'-I{_DM_DIR}',
+            # Statically link the MinGW runtime (libgcc/libstdc++/libwinpthread)
+            # so the DLL has no external dependency on the compiler's own bin/
+            # directory being on PATH at load time -- otherwise ctypes.CDLL()
+            # fails with a misleading "could not find module" (it's actually a
+            # missing *dependency*, not a missing sim_bridge.dll itself).
+            '-static-libgcc', '-static-libstdc++', '-static',
+            f'-I{_BRIDGE_DIR}',
             *sources,
             '-o', _DLL_PATH,
         ]
@@ -126,7 +157,7 @@ def build(force: bool = False, verbose: bool = True) -> bool:
         )
 
     if verbose:
-        print(f"[drone_bridge] Build succeeded → {_DLL_PATH}")
+        print(f"[drone_bridge] Build succeeded -> {_DLL_PATH}")
     return True
 
 

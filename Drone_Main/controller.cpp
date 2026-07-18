@@ -47,8 +47,18 @@ void Controller::update(IMU& imu, Position& pos, float tx, float ty, float tz, f
     _baseThrottle = _clamp(HOVER_THROTTLE + cv.z, 0.0f, 1.0f);
   }
 
-  // Attitude loop at full rate
-  AttitudeOutput att = _attCtrl.update(imu, _cvX, _cvY, dt);
+  // Attitude loop at full rate. _cvX/_cvY are world-frame (PositionPID
+  // operates on Position's world-frame x/y against fixed waypoint targets).
+  // Rotate into body frame by -yaw before treating them as pitch/roll tilt
+  // commands -- otherwise "pitch forward" moves the vehicle in its current
+  // heading direction, not toward the world-frame target, and any
+  // keep_heading=false leg (nonzero target yaw) can spiral away.
+  float yawNow = imu.getYaw();
+  float cosY = cosf(yawNow), sinY = sinf(yawNow);
+  float bodyX =  _cvX * cosY + _cvY * sinY;
+  float bodyY = -_cvX * sinY + _cvY * cosY;
+
+  AttitudeOutput att = _attCtrl.update(imu, bodyX, bodyY, dt);
   float yawCmd       = _yawCtrl.update(imu, _cvYaw, dt);
 
   _writeMotors(att.roll, att.pitch, yawCmd, _baseThrottle);

@@ -1,0 +1,19 @@
+# Build artifacts, staged copies of Drone_Main sources, and compiled output.
+# The staged .cpp/.h copies below are NEVER the source of truth -- edit the
+# real files in Drone_Main/ and rebuild; drone_bridge.py re-copies them fresh
+# on every build.
+PID.cpp
+PID.h
+AttitudeController.cpp
+AttitudeController.h
+YawController.cpp
+YawController.h
+PositionPID.cpp
+PositionPID.h
+controller.cpp
+controller.h
+main.h
+*.dll
+*.so
+*.obj
+*.o

@@ -101,6 +101,88 @@ def plot_results(t: np.ndarray, states: np.ndarray, commands: np.ndarray,
     plt.show()
 
 
+def plot_tuning_progress(history: list, best_gains: dict, title: str = "Monte Carlo Gain Search"):
+    """
+    Args:
+        history: list of per-trial dicts (see tools/tune_gains.py::tune), each with
+                 trial, phase, cost, diverged, best_cost, best_roll_rms_deg,
+                 best_pitch_rms_deg, best_yaw_err_rms_deg, best_alt_rms_cm,
+                 best_jerk_pct, best_progress.
+        best_gains: winning gain dict, for the final bar chart.
+        title: figure title.
+    """
+    trial      = np.array([r['trial'] for r in history])
+    cost       = np.array([r['cost'] for r in history], dtype=float)
+    best_cost  = np.array([r['best_cost'] for r in history], dtype=float)
+    diverged   = np.array([r['diverged'] for r in history])
+    is_local   = np.array([r['phase'] == 'local' for r in history])
+    phase_boundary = trial[is_local][0] if is_local.any() else None
+
+    fig = plt.figure(figsize=(15, 9))
+    fig.suptitle(title, fontsize=14)
+    gs = gridspec.GridSpec(2, 2, figure=fig, hspace=0.35, wspace=0.28)
+
+    ax_cost = fig.add_subplot(gs[0, 0])
+    ax_metr = fig.add_subplot(gs[0, 1])
+    ax_jerk = fig.add_subplot(gs[1, 0])
+    ax_gain = fig.add_subplot(gs[1, 1])
+
+    # --- Cost convergence: raw per-trial cost (scatter) + best-so-far (line) ---
+    cost_plot = np.clip(cost, 1e-2, None)   # log-safe
+    ok = ~diverged
+    ax_cost.scatter(trial[ok],  cost_plot[ok],  s=10, color='C0', alpha=0.5, label='trial cost')
+    ax_cost.scatter(trial[~ok], cost_plot[~ok], s=10, color='C3', alpha=0.5, label='diverged')
+    ax_cost.plot(trial, best_cost, color='k', linewidth=1.8, label='best so far')
+    if phase_boundary is not None:
+        ax_cost.axvline(phase_boundary, color='gray', linestyle='--', linewidth=1,
+                        label='global → local')
+    ax_cost.set_yscale('log')
+    ax_cost.set_xlabel('trial'); ax_cost.set_ylabel('cost (log)')
+    ax_cost.set_title('Cost convergence')
+    ax_cost.legend(fontsize=8); ax_cost.grid(True, which='both', alpha=0.3)
+
+    # --- Best-so-far tracking-error metrics over the search ---
+    ax_metr.plot(trial, [r['best_xy_rms_cm']       for r in history], label='xy position RMS [cm]', linewidth=2)
+    ax_metr.plot(trial, [r['best_alt_rms_cm']      for r in history], label='alt RMS [cm]', linewidth=2)
+    ax_metr.plot(trial, [r['best_roll_rms_deg']    for r in history], label='roll RMS [deg]')
+    ax_metr.plot(trial, [r['best_pitch_rms_deg']   for r in history], label='pitch RMS [deg]')
+    ax_metr.plot(trial, [r['best_yaw_err_rms_deg'] for r in history], label='yaw err RMS [deg]')
+    if phase_boundary is not None:
+        ax_metr.axvline(phase_boundary, color='gray', linestyle='--', linewidth=1)
+    ax_metr.set_xlabel('trial'); ax_metr.set_ylabel('error (best-so-far)')
+    ax_metr.set_title('Best-so-far tracking error')
+    ax_metr.legend(fontsize=8); ax_metr.grid(True, alpha=0.3)
+
+    # --- Best-so-far jerk% and mission progress ---
+    ax_jerk.plot(trial, [r['best_jerk_pct'] for r in history], color='C4', label='motor jerk [%/step]')
+    ax_jerk.set_xlabel('trial'); ax_jerk.set_ylabel('jerk [%/step]', color='C4')
+    ax_jerk.tick_params(axis='y', labelcolor='C4')
+    if phase_boundary is not None:
+        ax_jerk.axvline(phase_boundary, color='gray', linestyle='--', linewidth=1)
+    ax_prog = ax_jerk.twinx()
+    ax_prog.plot(trial, [r['best_progress'] * 100 for r in history], color='C2', label='mission progress [%]')
+    ax_prog.set_ylabel('mission progress [%]', color='C2')
+    ax_prog.tick_params(axis='y', labelcolor='C2')
+    ax_prog.set_ylim(0, 105)
+    ax_jerk.set_title('Best-so-far jerk & mission progress')
+    ax_jerk.grid(True, alpha=0.3)
+
+    # --- Final winning gains, grouped by axis ---
+    axes_order = ['roll', 'pitch', 'yaw', 'x', 'y', 'z']
+    terms = ['kp', 'ki', 'kd']
+    x = np.arange(len(axes_order))
+    width = 0.25
+    for j, term in enumerate(terms):
+        vals = [best_gains[f'{term}_{ax}'] for ax in axes_order]
+        ax_gain.bar(x + (j - 1) * width, vals, width, label=term)
+    ax_gain.set_xticks(x); ax_gain.set_xticklabels(axes_order)
+    ax_gain.set_ylabel('gain value')
+    ax_gain.set_title('Winning gains by axis')
+    ax_gain.legend(fontsize=8); ax_gain.grid(True, axis='y', alpha=0.3)
+
+    plt.show()
+
+
 def print_metrics(t: np.ndarray, states: np.ndarray, setpoint_z: float = 1.0):
     """Print basic stability metrics to console."""
     z = states[:, 2]

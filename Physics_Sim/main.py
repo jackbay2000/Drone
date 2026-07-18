@@ -22,6 +22,7 @@ import numpy as np
 from sim.vehicle               import load_vehicle
 from sim.motor_model           import MotorModel
 from sim.physics_engine        import PhysicsEngine
+from sim.timing                import ControlLoopTiming
 from controller.pid_controller import DroneController
 from controller.arduino_parser import parse_gains
 from controller.waypoint_controller import load_waypoints
@@ -84,11 +85,13 @@ def run(scenario_name: str = 'hover', dt: float = 0.002,
     state     = engine.reset()
     states[0] = state
     controller.reset()
+    timing    = ControlLoopTiming(engine)
+    timing.reset(state)
 
     print(f"\n    Simulating {duration}s at dt={dt*1000:.1f}ms ({n_steps} steps)...")
 
     for i in range(n_steps):
-        cmd          = controller.update(state, dt)
+        cmd          = timing.step(controller, state, dt)
         commands[i]  = cmd
         state        = engine.step(state, cmd, dt)
         states[i+1]  = state
@@ -145,13 +148,15 @@ def _run_waypoints(dt: float = 0.002, waypoints_file: str = None):
     state     = engine.reset()
     states[0] = state
     controller.reset()
+    timing    = ControlLoopTiming(engine)
+    timing.reset(state)
 
     print(f"\n    Simulating {duration:.0f}s at dt={dt*1000:.1f}ms ({n_steps} steps)...")
     print(f"  {'t(s)':>6}  {'WP':>2}  {'x':>7}  {'y':>7}  {'z':>6}"
           f"  {'roll':>6}  {'pitch':>6}  {'yaw':>6}")
 
     for i in range(n_steps):
-        cmd          = controller.update(state, dt)
+        cmd          = timing.step(controller, state, dt)
         commands[i]  = cmd
         wp_log[i]    = controller.current_waypoint_index
         state        = engine.step(state, cmd, dt)
@@ -192,7 +197,7 @@ def _run_waypoints(dt: float = 0.002, waypoints_file: str = None):
 # ------------------------------------------------------------------
 def _run_tune(dt: float = 0.002, waypoints_file: str = None,
               tune_trials: int = 250, tune_local: int = 250,
-              tune_dt: float = 0.004, tune_duration: float = 30.0,
+              tune_dt: float = 0.004, tune_duration: float = 45.0,
               tune_seed: int = None):
     from tools.tune_gains import tune, DEFAULT_MISSION
 
@@ -228,9 +233,11 @@ def _run_tune(dt: float = 0.002, waypoints_file: str = None,
     state     = engine.reset()
     states[0] = state
     controller.reset()
+    timing    = ControlLoopTiming(engine)
+    timing.reset(state)
 
     for i in range(n_steps):
-        cmd         = controller.update(state, dt)
+        cmd         = timing.step(controller, state, dt)
         commands[i] = cmd
         state       = engine.step(state, cmd, dt)
         states[i+1] = state
@@ -265,8 +272,9 @@ if __name__ == '__main__':
                         help='Local refinement trials (--scenario tune)')
     parser.add_argument('--tune-dt', type=float, default=0.004,
                         help='Timestep used during tuning search (default 0.004, coarser for speed)')
-    parser.add_argument('--tune-duration', type=float, default=30.0,
-                        help='Per-trial timeout in seconds (--scenario tune)')
+    parser.add_argument('--tune-duration', type=float, default=45.0,
+                        help='Per-trial timeout in seconds (--scenario tune). Kept generous '
+                             'since the cost function no longer rewards finishing faster.')
     parser.add_argument('--tune-seed', type=int, default=None,
                         help='RNG seed for reproducible tuning runs')
     args = parser.parse_args()

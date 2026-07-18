@@ -48,6 +48,25 @@ class PhysicsEngine:
         return s
 
     # ------------------------------------------------------------------
+    def true_sensor_frame(self, state: np.ndarray):
+        """
+        Returns (specific_force_body [m/s^2], body_rates [rad/s], R) at the
+        given true state, using the motors' CURRENT lag state -- i.e. what an
+        ideal (noiseless) accelerometer/gyro would read right now. Used by
+        sim/estimator.py to synthesize raw sensor readings for the ported
+        IMU.cpp/Position.cpp algorithms. Reuses _deriv() rather than a second
+        thrust/rotation implementation, so there's one source of truth.
+        """
+        throttles = np.array([m._actual_throttle for m in self._motors])
+        deriv = self._deriv(state, throttles)
+        a_world = deriv[3:6]
+        phi, theta, psi = state[6], state[7], state[8]
+        R = _rotation_matrix(phi, theta, psi)
+        f_body = R.T @ (a_world + np.array([0.0, 0.0, G]))
+        omega_body = state[9:12].copy()
+        return f_body, omega_body, R
+
+    # ------------------------------------------------------------------
     def motor_commands_from_wrench(self, F: float, tau: np.ndarray) -> np.ndarray:
         """
         Given desired total thrust F [N] and body torques tau [N·m],
