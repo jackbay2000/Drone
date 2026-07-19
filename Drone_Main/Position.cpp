@@ -2,10 +2,15 @@
 #include <math.h>
 
 // Focal length of the PMW3901 lens in effective pixels.
-// Tune this by moving the drone a known distance and comparing the reported
-// X/Y against reality. Increase if reported distance reads too small,
-// decrease if it reads too large.
-static constexpr float FOCAL_LEN    = 30.0f;
+// Bench-calibrated 2026-07-19 via two known-distance slide tests (3 ft and
+// 5 ft) with Position_Test.ino -- the old value of 30.0f was off by ~20.5x
+// (a genuine unit conversion error, not just an uncalibrated guess). New
+// value derived from x-axis scale factor, consistent to within ~4.5% across
+// both tests. Re-tune the same way if the flow sensor or lens is ever
+// replaced: move the drone a known distance and compare reported X/Y against
+// reality. Increase if reported distance reads too small, decrease if it
+// reads too large.
+static constexpr float FOCAL_LEN    = 618.0f;
 
 // Altitude low-pass weight. Higher = smoother but slower to respond.
 static constexpr float ALT_ALPHA    = 0.85f;

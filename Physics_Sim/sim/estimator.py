@@ -28,7 +28,8 @@ ACCEL_LSB_PER_G  = 16384.0   # IMU.cpp: ax/16384.0
 GYRO_LSB_PER_DPS = 131.0     # IMU.cpp: gx/131.0
 
 # PMW3901 lens focal length (effective pixels) -- Position.cpp FOCAL_LEN
-FOCAL_LEN = 30.0
+# Bench-calibrated 2026-07-19, see Drone_Main/Position.cpp for derivation.
+FOCAL_LEN = 618.0
 
 
 # ============================================================================
