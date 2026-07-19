@@ -1,0 +1,91 @@
+TEMPORARY FILE — delete once the tests are done and results are shared back.
+Quick-reference for the two bench tests. Full reasoning is in chat if you
+need it, this is just the checklist.
+
+===============================================================================
+0. UPLOAD
+===============================================================================
+Upload Position_Test.ino to the board like any other sketch (same wiring as
+Drone_Main: MPU6050 + VL53L1X on I2C, PMW3901 CS on pin 10). No props, no
+ESCs involved — this sketch never touches motors.
+
+Open a serial connection at 115200 baud, either the Arduino Serial Monitor
+or (better, auto-saves to a file) the logger:
+
+    cd Position_Test
+    pip install pyserial          (one-time)
+    python log_serial.py                    -> logs until you Ctrl+C
+    python log_serial.py --seconds 60       -> auto-stops after 60s
+
+Output lands in Position_Test/logs/position_test_<timestamp>.csv.
+
+===============================================================================
+TEST 1 — FOCAL_LEN calibration (the important one)
+===============================================================================
+Goal: find out if Drone_Main/Position.cpp's FOCAL_LEN=30 constant is right.
+
+1. Put the board flat on your DESK (not the floor — desk is more likely to
+   be locally level than an old-house floor, and this test doesn't need the
+   desk-edge/floor setup, see step 2).
+2. Power on / reset it right there. Don't touch it until "# Position_Test
+   ready." prints — that's the ~5s level+stationary calibration window.
+3. Wait a couple more seconds after "ready" for the Z reading to settle
+   (it's low-pass filtered, takes a moment to converge).
+4. Lay a tape measure / yardstick along the desk as a straight guide. Mark
+   two points as far apart as your desk allows — 1 meter minimum, longer
+   is more accurate.
+5. IMPORTANT — height floor: keep the board at LEAST 10-15cm above the
+   desk surface during the slide. Below 5cm, Position.cpp stops updating
+   X/Y entirely (ALT_MIN cutoff) and it'll look like the sensor died when
+   it's actually just too low. The flow sensor also needs ~8cm minimum to
+   focus at all.
+6. Check the desk has visible texture (wood grain, pattern) where the
+   sensor will be looking. If it's a plain smooth surface, put a printed
+   sheet of paper or a placemat down first — the flow sensor needs texture
+   to track against.
+7. Note the CURRENT x_m / y_m values right before you start moving (your
+   "before" baseline — don't assume it's zero).
+8. Slide the board from mark to mark along your measured distance, keeping
+   THREE things constant the whole way: height, level (no tilt), and
+   heading (no twisting/rotating).
+9. Note the ending x_m / y_m values.
+10. Whichever axis (x or y) changed by close to your measured slide
+    distance is your "forward" direction — compare that number against the
+    real distance. The other axis should have stayed near zero (if it
+    didn't, that's useful axis-orientation info too).
+
+RECORD: your measured slide distance, and the before/after x_m and y_m.
+
+===============================================================================
+TEST 2 — Altitude sanity check (separate, simple, no movement)
+===============================================================================
+Goal: sanity-check the rangefinder's Z reading against a known height.
+
+1. Stack some books (or anything rigid) to a height you can measure
+   precisely with a ruler/tape — floor to where the board's sensor plane
+   will sit. Note this measured height.
+2. Set the board on top, level, sensor facing straight down at the floor.
+3. Power on / reset there, wait for "ready" + a couple seconds to settle
+   (same as Test 1 steps 2-3).
+4. Read the z_m value.
+
+RECORD: your ruler-measured height vs. the reported z_m.
+
+===============================================================================
+TEST 3 — Stationary noise (how jittery are the readings at rest)
+===============================================================================
+1. Set the board down anywhere, level, stationary.
+2. Power on / reset, wait for "ready".
+3. Start log_serial.py (or just let it keep logging) for 30-60 seconds,
+   completely undisturbed.
+4. Stop it (Ctrl+C, or let --seconds auto-stop).
+
+RECORD: just send me the saved .csv file from Position_Test/logs/ — I'll
+compute the standard deviation of each column myself.
+
+===============================================================================
+WHAT TO SEND BACK
+===============================================================================
+- Test 1: measured slide distance + before/after x_m, y_m
+- Test 2: measured height + reported z_m
+- Test 3: the logged .csv file (or just paste its contents)

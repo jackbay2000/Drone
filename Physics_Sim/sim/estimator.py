@@ -112,7 +112,15 @@ class FlowCountSynth:
 
         dx_int += int(round(rng.normal(0.0, count_noise_std)))
         dy_int += int(round(rng.normal(0.0, count_noise_std)))
-        return dx_int, dy_int
+
+        # Emit in "raw sensor" convention (swapped + inverted relative to
+        # flow-frame forward/left) -- see the matching correction in
+        # PositionEstimator.update(), which mirrors the real fix bench-
+        # verified 2026-07-18 in Position.cpp. These two swaps are exact
+        # inverses of each other, so this has zero net effect on simulated
+        # behavior; it exists purely so both halves keep mirroring the
+        # actual (now-corrected) firmware convention.
+        return -dy_int, -dx_int
 
 
 def synth_raw_range_mm(z_true, roll_true, pitch_true, rng,
@@ -262,6 +270,12 @@ class PositionEstimator:
             return
 
         # -- X/Y from optical flow --
+        # Bench-verified 2026-07-18: the PMW3901's raw axes are swapped and
+        # inverted relative to body forward/left. Mirrors the same fix in
+        # Drone_Main/Position.cpp (dx, dy here are the "raw" sensor values,
+        # matching FlowCountSynth's synthesis convention above).
+        dx, dy = -dy, -dx
+
         if abs(dx) <= self.FLOW_GATE and abs(dy) <= self.FLOW_GATE:
             return
 

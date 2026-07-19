@@ -39,17 +39,46 @@ G = 9.81
 CONTROL_HZ     = 250.0  # Drone_Main.ino: LOOP_PERIOD_US = 4000
 RANGEFINDER_HZ = 50.0   # Rangefinder.cpp: setTimingBudget(20) -> up to 50 Hz
 
-# Raw-sensor noise/dropout -- engineering estimates, not measured device
-# characteristics. Applied at the RAW reading level (before the ported
-# estimator algorithms run), so calibration, the median-of-3 spike filter,
-# axis remap, in-flight yaw-bias learning, and the FLOW_GATE/altitude-window
-# rejection all see and react to it exactly as real firmware would.
-DEFAULT_ACCEL_NOISE_STD_G   = 0.02
-DEFAULT_GYRO_NOISE_STD_DPS  = 0.05
-DEFAULT_FLOW_NOISE_STD      = 1.0    # raw counts
-DEFAULT_FLOW_DROPOUT_PROB   = 0.03   # per control tick (lost optical-flow lock)
-DEFAULT_RANGE_NOISE_STD_M   = 0.01
-DEFAULT_RANGE_DROPOUT_PROB  = 0.05   # per scheduled 50 Hz sample (rejected reading)
+# Raw-sensor noise/dropout. Applied at the RAW reading level (before the
+# ported estimator algorithms run), so calibration, the median-of-3 spike
+# filter, axis remap, in-flight yaw-bias learning, and the FLOW_GATE/
+# altitude-window rejection all see and react to it exactly as real firmware
+# would.
+#
+# Grounded in published datasheet specs where available (2026-07-18):
+#   - Gyro: MPU6050 datasheet total RMS noise spec is 0.05 deg/s (rate noise
+#     spectral density 0.005 deg/s/sqrt(Hz)); an independent bench measurement
+#     at 500 Hz found 0.0331 deg/s (Pololu forum). 0.05 deg/s used directly.
+#   - Accel: MPU6050 datasheet noise density is ~400 ug/sqrt(Hz). RMS at our
+#     ~250 Hz sample rate: 400e-6 * sqrt(250) ~= 0.0063 g. Real-world (mounting,
+#     temperature) typically exceeds the datasheet figure, so this is a floor,
+#     not a ceiling -- the separate vibration terms below add the rest.
+#   - Rangefinder: VL53L1X datasheet typical accuracy is ~+-5mm under good
+#     conditions; used a touch looser (7mm) for realistic indoor conditions.
+#   - Flow: no public PMW3901 noise-count spec found, and this sensor's
+#     count magnitude is inherently tied to Position.cpp's own uncalibrated
+#     FOCAL_LEN constant anyway (see project memory "estimator port") --
+#     left as an engineering estimate pending real bench calibration.
+DEFAULT_ACCEL_NOISE_STD_G   = 0.006  # MPU6050 datasheet: ~400 ug/sqrt(Hz) @ ~250Hz
+DEFAULT_GYRO_NOISE_STD_DPS  = 0.05   # MPU6050 datasheet: total RMS noise spec
+DEFAULT_FLOW_NOISE_STD      = 1.0    # raw counts -- engineering estimate, no public spec (see above)
+DEFAULT_FLOW_DROPOUT_PROB   = 0.03   # per control tick (lost optical-flow lock) -- engineering estimate
+DEFAULT_RANGE_NOISE_STD_M   = 0.007  # VL53L1X datasheet: ~+-5mm typical accuracy, +margin
+DEFAULT_RANGE_DROPOUT_PROB  = 0.05   # per scheduled 50 Hz sample (rejected reading) -- engineering estimate
+
+# Prop/motor vibration coupling into the IMU -- NOT modeled at all before
+# this. Real vibration is periodic (motor RPM and its harmonics, prop
+# blade-pass frequency) and usually well above the 250 Hz sample rate, so it
+# aliases into the sampled signal rather than showing up as a clean tone --
+# properly simulating that aliasing needs real per-motor RPM and a
+# vibration spectrum neither of which is measured here. This models only
+# the practically-important consequence: more commanded thrust -> more
+# accelerometer/gyro noise, approximated as extra white noise whose std
+# scales linearly with average commanded throttle (0..1) on top of the
+# baseline sensor noise above. Coarse by design; replace with real
+# accelerometer-logged vibration data if/when available.
+DEFAULT_VIBRATION_ACCEL_STD_G   = 0.03   # additional accel noise std at full throttle
+DEFAULT_VIBRATION_GYRO_STD_DPS  = 0.15   # additional gyro noise std at full throttle
 
 
 class ControlLoopTiming:
@@ -60,7 +89,9 @@ class ControlLoopTiming:
                  flow_noise_std: float = DEFAULT_FLOW_NOISE_STD,
                  flow_dropout_prob: float = DEFAULT_FLOW_DROPOUT_PROB,
                  range_noise_std_m: float = DEFAULT_RANGE_NOISE_STD_M,
-                 range_dropout_prob: float = DEFAULT_RANGE_DROPOUT_PROB):
+                 range_dropout_prob: float = DEFAULT_RANGE_DROPOUT_PROB,
+                 vibration_accel_std_g: float = DEFAULT_VIBRATION_ACCEL_STD_G,
+                 vibration_gyro_std_dps: float = DEFAULT_VIBRATION_GYRO_STD_DPS):
         self.engine = engine
         self.control_period = 1.0 / control_hz
         self.range_period    = 1.0 / rangefinder_hz
@@ -73,6 +104,8 @@ class ControlLoopTiming:
         self._flow_dropout_prob  = flow_dropout_prob  if sensor_noise else 0.0
         self._range_noise_std_m  = range_noise_std_m  if sensor_noise else 0.0
         self._range_dropout_prob = range_dropout_prob if sensor_noise else 0.0
+        self._vibration_accel_std_g  = vibration_accel_std_g  if sensor_noise else 0.0
+        self._vibration_gyro_std_dps = vibration_gyro_std_dps if sensor_noise else 0.0
 
         self._t_since_control = 0.0
         self._t_since_range   = 0.0
@@ -134,11 +167,19 @@ class ControlLoopTiming:
                 range_ready = True
                 self._t_since_range -= self.range_period
 
+            # Vibration scales with commanded thrust; use the previous tick's
+            # command (self._last_cmd) as the proxy for current motor speed
+            # since motor lag means actual RPM tracks the command, not the
+            # instant it changes.
+            avg_throttle = float(np.mean(self._last_cmd))
+            accel_std = self._accel_noise_std_g + self._vibration_accel_std_g * avg_throttle
+            gyro_std  = self._gyro_noise_std_dps + self._vibration_gyro_std_dps * avg_throttle
+
             f_body, omega_body, R = self.engine.true_sensor_frame(true_state)
             ax, ay, az, gx, gy, gz = synth_raw_imu(
                 f_body, omega_body, self._rng,
-                accel_noise_std_g=self._accel_noise_std_g,
-                gyro_noise_std_dps=self._gyro_noise_std_dps)
+                accel_noise_std_g=accel_std,
+                gyro_noise_std_dps=gyro_std)
 
             v_body = R.T @ true_state[3:6]
             gz_true, gx_true = omega_body[2], omega_body[0]

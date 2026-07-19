@@ -47,8 +47,15 @@ void Position::update(IMU &imu, FlowSensor &flow, Rangefinder &rangefinder) {
   if (_z < ALT_MIN) return;
 
   // ── X/Y from optical flow ─────────────────────────────────────────────────
-  int16_t dx = 0, dy = 0;
-  flow.read(dx, dy);
+  // Bench-verified 2026-07-18: the PMW3901's raw axes are swapped AND
+  // inverted relative to body forward/left -- moving the drone +X (forward)
+  // showed up as -Y, and +Y (left) showed up as -X. This corrects it in
+  // software, the same way IMU.cpp's FLOW_X_SIGN/FLOW_Y_SIGN already correct
+  // for the (separate) 90 deg IMU-vs-flow-sensor mounting relationship.
+  int16_t dxRaw = 0, dyRaw = 0;
+  flow.read(dxRaw, dyRaw);
+  int16_t dx = -dyRaw;
+  int16_t dy = -dxRaw;
 
   if (abs(dx) <= FLOW_GATE && abs(dy) <= FLOW_GATE) return;
 

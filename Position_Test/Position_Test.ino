@@ -20,6 +20,13 @@ FlowSensor  flow(10);
 Rangefinder rangefinder;
 Position    position;
 
+// CSV telemetry -- pipe this straight into a .csv file with
+// Position_Test/log_serial.py (or any serial logger) instead of hand-copying
+// from the Serial Monitor. Header is printed once at boot; every line after
+// that is pure comma-separated data, no labels, so it's directly loadable
+// with pandas.read_csv() / Excel with no cleanup.
+static constexpr char CSV_HEADER[] = "t_ms,x_m,y_m,z_m,roll_deg,pitch_deg,yaw_deg";
+
 void setup() {
   Serial.begin(115200);
   while (!Serial) {}
@@ -30,7 +37,8 @@ void setup() {
   position.reset();
   position.setup(imu, flow, rangefinder);
 
-  Serial.println("Position_Test ready.");
+  Serial.println("# Position_Test ready.");
+  Serial.println(CSV_HEADER);
 }
 
 void loop() {
@@ -51,10 +59,11 @@ void loop() {
   if (micros() - lastPrint < 100000UL) return;
   lastPrint = micros();
 
-  Serial.print("X: ");      Serial.print(position.getX(), 3);
-  Serial.print("  Y: ");    Serial.print(position.getY(), 3);
-  Serial.print("  Z: ");    Serial.print(position.getZ(), 3);
-  Serial.print("  Roll: "); Serial.print(degrees(imu.getRoll()),  1);
-  Serial.print("  Pitch: ");Serial.print(degrees(imu.getPitch()), 1);
-  Serial.print("  Yaw: ");  Serial.println(degrees(imu.getYaw()),   1);
+  Serial.print(millis());                          Serial.print(',');
+  Serial.print(position.getX(), 4);                 Serial.print(',');
+  Serial.print(position.getY(), 4);                 Serial.print(',');
+  Serial.print(position.getZ(), 4);                 Serial.print(',');
+  Serial.print(degrees(imu.getRoll()),  3);          Serial.print(',');
+  Serial.print(degrees(imu.getPitch()), 3);          Serial.print(',');
+  Serial.println(degrees(imu.getYaw()), 3);
 }

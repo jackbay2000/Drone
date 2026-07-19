@@ -35,12 +35,15 @@ _OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', 'outputs', 'tuning')
 # ---------------------------------------------------------------------------
 # Default mission -- matches Drone_Main/Waypoints.h exactly, so gains tuned
 # here are being evaluated against the same mission the real firmware flies.
+# Hover altitude capped at 0.4 m: bench testing found the VL53L1X rangefinder
+# reads accurately near 0.19 m but showed a growing undershoot at 0.58 m+
+# (see Waypoints.h), so the mission stays well clear of that degraded range.
 # ---------------------------------------------------------------------------
 DEFAULT_MISSION = [
-    Waypoint(0.0, 0.0, 1.0, True),
-    Waypoint(1.0, 0.0, 1.0, False),
-    Waypoint(1.0, 1.0, 1.0, False),
-    Waypoint(0.0, 0.0, 1.0, True),
+    Waypoint(0.0, 0.0, 0.4, True),
+    Waypoint(1.0, 0.0, 0.4, False),
+    Waypoint(1.0, 1.0, 0.4, False),
+    Waypoint(0.0, 0.0, 0.4, True),
     Waypoint(0.0, 0.0, 0.0, True),
 ]
 
@@ -113,9 +116,15 @@ def perturb_gains(base: dict, rng: np.random.Generator, sigma_frac: float) -> di
     return out
 
 
-def evaluate(gains: dict, engine: PhysicsEngine, waypoints, dt: float, max_duration: float) -> tuple:
+def evaluate(gains: dict, engine: PhysicsEngine, waypoints, dt: float, max_duration: float,
+            seed: int = None) -> tuple:
     """Fly `waypoints` with `gains` and score the result. Lower cost = better.
-    Returns (cost, info_dict)."""
+    Returns (cost, info_dict).
+
+    seed: if given, makes the sensor-noise realization reproducible (used by
+    tools/robustness.py to sweep many *specific* noise draws); if None
+    (default, used during the Monte Carlo search itself), each call draws
+    fresh OS-entropy noise so trials aren't overfit to one draw."""
     controller = DroneController(engine, gains=gains)
     for wp in waypoints:
         controller.add_waypoint(wp.x, wp.y, wp.z, keep_heading=wp.keep_heading)
@@ -124,7 +133,8 @@ def evaluate(gains: dict, engine: PhysicsEngine, waypoints, dt: float, max_durat
 
     state = engine.reset()
     controller.reset()
-    timing = ControlLoopTiming(engine)
+    rng = np.random.default_rng(seed) if seed is not None else None
+    timing = ControlLoopTiming(engine, rng=rng)
     timing.reset(state)
 
     n_steps = int(max_duration / dt)
