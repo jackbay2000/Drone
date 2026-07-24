@@ -23,6 +23,17 @@ static constexpr float ALT_MAX      = 3.50f;  // m
 // and do not update position. Prevents drift while hovering stationary.
 static constexpr int16_t FLOW_GATE  = 1;
 
+// If this long passes with no fresh, valid rangefinder reading, getZ()'s
+// value is considered untrustworthy (see altitudeStale()). ~25x the nominal
+// 20ms/50Hz refresh -- generous margin for the occasional dropout, but a
+// clear signal something is actually wrong beyond that. Diagnosed 2026-07-19:
+// without this, a sustained loss of valid readings (e.g. sensor lens fully
+// obstructed, or drifting outside ALT_MIN/ALT_MAX for a long stretch) left
+// _z frozen at its last value forever with nothing downstream ever finding
+// out -- the position loop kept flying confidently on stale data with no
+// recovery path.
+static constexpr float ALT_STALE_TIMEOUT = 0.5f;  // s
+
 Position::Position() {}
 
 void Position::setup(IMU &imu, FlowSensor &flow, Rangefinder &rangefinder) {
@@ -37,14 +48,18 @@ void Position::update(IMU &imu, FlowSensor &flow, Rangefinder &rangefinder) {
   _lastMicros = now;
   if (dt <= 0.0f || dt > 0.1f) return;
 
+  _timeSinceValidRange += dt;
+
   // ── Altitude (Z) ─────────────────────────────────────────────────────────
   // Rangefinder measures slant distance along its axis. When the drone is
   // tilted, correct back to vertical height using roll and pitch.
   rangefinder.update();
   if (rangefinder.hasData()) {
     float h = rangefinder.getDistance() * cosf(imu.getRoll()) * cosf(imu.getPitch());
-    if (h >= ALT_MIN && h <= ALT_MAX)
+    if (h >= ALT_MIN && h <= ALT_MAX) {
       _z = ALT_ALPHA * _z + (1.0f - ALT_ALPHA) * h;
+      _timeSinceValidRange = 0.0f;
+    }
   }
 
   // Refuse to update X/Y without a valid altitude — altitude is required to
@@ -94,7 +109,12 @@ float Position::getX() const { return _x; }
 float Position::getY() const { return _y; }
 float Position::getZ() const { return _z; }
 
+bool Position::altitudeStale() const {
+  return _timeSinceValidRange > ALT_STALE_TIMEOUT;
+}
+
 void Position::reset() {
   _x = _y = 0.0f;
+  _timeSinceValidRange = 0.0f;
   // Z is intentionally not reset — it reflects real altitude from the sensor.
 }

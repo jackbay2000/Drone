@@ -243,21 +243,32 @@ class PositionEstimator:
     ALT_MIN   = 0.05
     ALT_MAX   = 3.50
     FLOW_GATE = 1
+    # Mirrors Drone_Main/Position.cpp's ALT_STALE_TIMEOUT -- see that file
+    # for why this exists (diagnosed 2026-07-19: no recovery path once the
+    # rangefinder stops producing valid readings for a sustained stretch).
+    ALT_STALE_TIMEOUT = 0.5
 
     def __init__(self):
         self._x = 0.0
         self._y = 0.0
         self._z = 0.0
+        self._time_since_valid_range = 0.0
 
     def reset(self):
         self._x = 0.0
         self._y = 0.0
+        self._time_since_valid_range = 0.0
         # Z intentionally not reset -- mirrors Position::reset()
+
+    def is_stale(self) -> bool:
+        return self._time_since_valid_range > self.ALT_STALE_TIMEOUT
 
     def update(self, dx, dy, range_ready, range_mm, est_roll, est_pitch,
               est_gx, est_gz, est_yaw, dt):
         if dt <= 0.0 or dt > 0.1:
             return
+
+        self._time_since_valid_range += dt
 
         # -- Altitude (rangefinder), only when a fresh sample is ready --
         if range_ready:
@@ -266,6 +277,7 @@ class PositionEstimator:
                 h = d_m * math.cos(est_roll) * math.cos(est_pitch)
                 if self.ALT_MIN <= h <= self.ALT_MAX:
                     self._z = self.ALT_ALPHA * self._z + (1.0 - self.ALT_ALPHA) * h
+                    self._time_since_valid_range = 0.0
 
         if self._z < self.ALT_MIN:
             return

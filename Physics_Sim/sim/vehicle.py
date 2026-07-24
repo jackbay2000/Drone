@@ -63,8 +63,42 @@ def load_vehicle(verbose=True) -> VehicleParams:
     if not components_loaded:
         _load_defaults(params, verbose)
 
-    _build_motor_positions(params)
+    if not _try_real_motor_positions(params, verbose):
+        _build_motor_positions(params)
     return params
+
+
+def _try_real_motor_positions(params: VehicleParams, verbose: bool) -> bool:
+    """
+    Use the actual per-motor (x, y) positions from component_list.json when
+    all four are present, instead of _build_motor_positions()'s idealized
+    symmetric square. Diagnosed 2026-07-24: this vehicle's real frame is NOT
+    symmetric (front-back motor offset 115.1mm vs left-right 103.1mm, ~12%
+    apart) -- _build_motor_positions collapses both to a single averaged
+    Euclidean distance, silently making roll and pitch torque arms identical
+    in the sim when they aren't on the real vehicle. Z is intentionally
+    ignored here (set to 0), same simplification _build_motor_positions
+    already made -- the mixer_matrix derivation assumes coplanar motors.
+    """
+    if not os.path.exists(_COMPONENTS_PATH):
+        return False
+    with open(_COMPONENTS_PATH) as f:
+        components = json.load(f).get('components', [])
+
+    by_name = {c['name']: c for c in components}
+    order = ['motor_fl', 'motor_fr', 'motor_rr', 'motor_rl']  # sim order
+    if not all(name in by_name and by_name[name].get('position_m') for name in order):
+        return False
+
+    params.motor_positions = np.array([
+        [by_name[name]['position_m'][0], by_name[name]['position_m'][1], 0.0]
+        for name in order
+    ])
+    if verbose:
+        print(f"[vehicle]   Using real per-motor positions from component_list.json "
+              f"(front-back arm {abs(params.motor_positions[0,0])*1000:.1f}mm, "
+              f"left-right arm {abs(params.motor_positions[0,1])*1000:.1f}mm)")
+    return True
 
 
 def _build_motor_positions(params: VehicleParams):

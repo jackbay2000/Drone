@@ -34,6 +34,15 @@ void Controller::update(IMU& imu, Position& pos, float tx, float ty, float tz, f
     return;
   }
 
+  // Same fail-safe pattern as the tilt cut above: if altitude data has been
+  // stale too long (see Position::altitudeStale()), the position loop would
+  // be flying on a frozen Z estimate with no way to know it's wrong. Cutting
+  // power is the safe default here, same as an excessive tilt.
+  if (pos.altitudeStale()) {
+    halt();
+    return;
+  }
+
   _cvYaw = targetYaw;
 
   // Position loop at POSITION_HZ

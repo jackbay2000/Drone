@@ -183,26 +183,60 @@ def plot_tuning_progress(history: list, best_gains: dict, title: str = "Monte Ca
     plt.show()
 
 
-def print_metrics(t: np.ndarray, states: np.ndarray, setpoint_z: float = 1.0):
-    """Print basic stability metrics to console."""
+def print_metrics(t: np.ndarray, states: np.ndarray, setpoint_z=1.0, settle_time: float = 1.0):
+    """Print basic stability metrics to console.
+
+    setpoint_z: either a single altitude target (scenarios that hold one
+    setpoint the whole run) or a per-sample array the same length as `t`
+    (multi-waypoint missions, where the active altitude target changes
+    over time -- comparing against a single fixed value there is wrong
+    for most of the trajectory, e.g. reporting "overshoot" relative to a
+    0m landing target while the vehicle spends most of its time correctly
+    holding 0.4m).
+
+    settle_time: seconds immediately after any target-altitude STEP CHANGE
+    (a new waypoint leg, most notably the final descent-to-land target
+    snapping from cruise altitude to 0) to exclude from "peak overshoot".
+    Diagnosed 2026-07-24: without this, peak overshoot for any waypoint
+    mission was dominated by "the target just changed and the vehicle
+    hasn't caught up yet" -- e.g. the instant a mission advances to its
+    landing leg, |z - 0| is still close to the full cruise altitude before
+    any descent has happened. That's not overshoot, it's the unavoidable
+    lag of not being able to teleport; mirrors evaluate()'s existing
+    "skip the first second" convention in tools/tune_gains.py, generalized
+    to every target change, not just the very first one."""
     z = states[:, 2]
     phi_deg   = np.degrees(states[:, 6])
     theta_deg = np.degrees(states[:, 7])
+    setpoint_z_arr = np.broadcast_to(np.asarray(setpoint_z, dtype=float), z.shape)
+
+    changed = np.concatenate(([True], np.abs(np.diff(setpoint_z_arr)) > 1e-9))
+    settled = np.ones(len(t), dtype=bool)
+    for t0 in t[changed]:
+        settled &= ~((t >= t0) & (t < t0 + settle_time))
+    if not settled.any():
+        settled = np.ones(len(t), dtype=bool)  # degenerate (very short run) -- fall back to everything
 
     ss_idx = int(len(t) * 0.8)  # last 20% of sim = steady state
-    z_ss = np.mean(z[ss_idx:])
-    z_err = abs(z_ss - setpoint_z)
-    z_peak = np.max(np.abs(z - setpoint_z))
+    ss_mask = settled.copy()
+    ss_mask[:ss_idx] = False
+    if not ss_mask.any():
+        ss_mask = np.zeros(len(t), dtype=bool); ss_mask[ss_idx:] = True
+    z_ss  = np.mean(z[ss_mask])
+    sp_ss = np.mean(setpoint_z_arr[ss_mask])
+    z_err = abs(z_ss - sp_ss)
+    z_peak = np.max(np.abs((z - setpoint_z_arr)[settled]))
 
     print("\n--- Simulation Metrics ---")
     print(f"  Altitude steady-state error : {z_err*100:.1f} cm")
-    print(f"  Altitude peak overshoot     : {z_peak*100:.1f} cm")
+    print(f"  Altitude peak overshoot     : {z_peak*100:.1f} cm  "
+          f"(excludes the first {settle_time:.1f}s after each target change)")
     print(f"  Roll  RMS (steady-state)    : {np.std(phi_deg[ss_idx:]):.2f}°")
     print(f"  Pitch RMS (steady-state)    : {np.std(theta_deg[ss_idx:]):.2f}°")
 
     # Settling time (within 5% of setpoint for altitude)
-    band = 0.05 * setpoint_z
-    settled = np.where(np.abs(z - setpoint_z) < band)[0]
+    band = 0.05 * np.abs(setpoint_z_arr)
+    settled = np.where(np.abs(z - setpoint_z_arr) < band)[0]
     if len(settled) > 0:
         # First time it enters and stays
         settle_t = t[settled[0]]

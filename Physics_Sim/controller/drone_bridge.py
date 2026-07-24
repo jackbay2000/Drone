@@ -201,8 +201,11 @@ def _get_lib(verbose: bool = True) -> ctypes.CDLL:
     lib.sim_mission_complete.restype  = ctypes.c_int
     lib.sim_mission_complete.argtypes = []
 
+    lib.sim_current_waypoint_index.restype  = ctypes.c_int
+    lib.sim_current_waypoint_index.argtypes = []
+
     lib.sim_set_state.restype  = None
-    lib.sim_set_state.argtypes = [ctypes.c_float] * 6
+    lib.sim_set_state.argtypes = [ctypes.c_float] * 6 + [ctypes.c_int]
 
     lib.sim_update.restype  = None
     lib.sim_update.argtypes = [ctypes.c_ulong,
@@ -234,6 +237,7 @@ class DroneController(BaseController):
         self._gains     = gains or {}
         self._waypoints: list[tuple[float, float, float, bool]] = []
         self._motor_buf = (ctypes.c_float * 4)()
+        self._altitude_stale = False
         self._setup_dll()
 
     # ------------------------------------------------------------------
@@ -271,8 +275,14 @@ class DroneController(BaseController):
 
     @property
     def current_waypoint_index(self) -> int:
-        # Controller::_currentWaypoint is private; not accessible from outside
-        return 0
+        return int(self._lib.sim_current_waypoint_index())
+
+    def set_altitude_stale(self, stale: bool):
+        """Mirrors Position::altitudeStale() -- called by ControlLoopTiming
+        each tick with the Python-side estimator's own staleness read, since
+        this DLL's stub Position class has no real sensors of its own to
+        judge that from (see cpp_bridge/Position.h)."""
+        self._altitude_stale = bool(stale)
 
     # ------------------------------------------------------------------
     def update(self, state: np.ndarray, dt: float) -> np.ndarray:
@@ -282,6 +292,7 @@ class DroneController(BaseController):
         self._lib.sim_set_state(
             ctypes.c_float(phi),   ctypes.c_float(theta), ctypes.c_float(psi),
             ctypes.c_float(x),     ctypes.c_float(y),     ctypes.c_float(z),
+            ctypes.c_int(1 if self._altitude_stale else 0),
         )
 
         dt_us = ctypes.c_ulong(max(1, int(dt * 1e6)))

@@ -19,12 +19,15 @@ public:
     void setX(float v) { _x = v; }
     void setY(float v) { _y = v; }
     void setZ(float v) { _z = v; }
+    void setAltitudeStale(bool s) { _stale = s; }
 
-    // Getters used by PositionPID
+    // Getters used by PositionPID / Controller
     float getX() const { return _x; }
     float getY() const { return _y; }
     float getZ() const { return _z; }
+    bool  altitudeStale() const { return _stale; }
 
 private:
     float _x, _y, _z;
+    bool  _stale = false;
 };

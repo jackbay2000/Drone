@@ -186,6 +186,13 @@ def evaluate(gains: dict, engine: PhysicsEngine, waypoints, dt: float, max_durat
     else:
         wp_idx_final = controller.current_waypoint_index
 
+    # Same tier as the tilt-based safety halt above: on real hardware this
+    # trips Position::altitudeStale() and cuts the motors (see
+    # Drone_Main/controller.cpp, diagnosed 2026-07-19), so a trial that
+    # triggers it is exactly as unsafe as one that tripped the tilt cut,
+    # not just "somewhat worse accuracy" buried in the RMS terms below.
+    safety_halted = safety_halted or timing.altitude_ever_stale
+
     landed = bool(controller.mission_complete)
     progress = (wp_idx_final + 1) / len(waypoints)
     n_samples = max(n_samples, 1)

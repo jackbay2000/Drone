@@ -140,8 +140,13 @@ int sim_mission_complete(void) {
     return _landed ? 1 : 0;   // mirrors Drone_Main.ino: "complete" == landed
 }
 
+int sim_current_waypoint_index(void) {
+    return _currentWP;
+}
+
 void sim_set_state(float roll, float pitch, float yaw,
-                   float x,   float y,     float z)
+                   float x,   float y,     float z,
+                   int altitude_stale)
 {
     _imu.setRoll(roll);
     _imu.setPitch(pitch);
@@ -149,6 +154,7 @@ void sim_set_state(float roll, float pitch, float yaw,
     _pos.setX(x);
     _pos.setY(y);
     _pos.setZ(z);
+    _pos.setAltitudeStale(altitude_stale != 0);
 }
 
 void sim_update(unsigned long dt_us, float motor_out[4]) {

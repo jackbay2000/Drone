@@ -38,15 +38,20 @@ SIM_API void sim_set_gains(
 SIM_API void sim_add_waypoint(float x, float y, float z, int keep_heading);
 SIM_API void sim_clear_waypoints(void);
 SIM_API int  sim_mission_complete(void);   // 1 = done, 0 = flying
+SIM_API int  sim_current_waypoint_index(void);   // index into the list passed to sim_add_waypoint
 
 // ---------------------------------------------------------------------------
 // Per-step interface
 // ---------------------------------------------------------------------------
 
 // Inject sensor state (roll/pitch/yaw in radians; x/y/z in metres).
-// Call before sim_update() each step.
+// altitude_stale: 1 if the Python-side position estimator's altitude
+// reading is currently stale (mirrors Position::altitudeStale() --
+// see Drone_Main/Position.cpp), 0 otherwise. Call before sim_update()
+// each step.
 SIM_API void sim_set_state(float roll, float pitch, float yaw,
-                           float x,   float y,     float z);
+                           float x,   float y,     float z,
+                           int altitude_stale);
 
 // Advance the simulated clock by dt_us microseconds, then run one
 // Controller::update() tick.  motor_out[4] receives normalized [0,1]

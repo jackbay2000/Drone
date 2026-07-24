@@ -1,0 +1,17 @@
+# Python bytecode / cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Bench-test log output (Position_Test/log_serial.py writes here)
+/logs/
+
+# Virtualenv, if one is ever created (Physics_Sim/INSTRUCTIONS.txt references
+# one, but none exists as of this commit -- everything currently runs
+# against the system python)
+.venv/
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
+*.swp

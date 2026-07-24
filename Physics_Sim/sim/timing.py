@@ -118,6 +118,7 @@ class ControlLoopTiming:
         self._filter  = ComplementaryFilter()
         self._pos_est = PositionEstimator()
         self._flow    = FlowCountSynth()
+        self._altitude_ever_stale = False
 
     def reset(self, state0: np.ndarray):
         """state0: the 12-element true state to calibrate/seed from (typically engine.reset())."""
@@ -128,6 +129,7 @@ class ControlLoopTiming:
         self._pos_est = PositionEstimator()
         self._pos_est.reset()
         self._flow    = FlowCountSynth()
+        self._altitude_ever_stale = False
 
         # Calibration mirrors IMU::setup()'s ~5s / 1000-sample average while
         # stationary and level -- on real hardware this happens on the
@@ -215,6 +217,18 @@ class ControlLoopTiming:
             sensed_state[7] = self._filter.get_pitch()
             sensed_state[8] = self._filter.get_yaw()
 
+            stale = self._pos_est.is_stale()
+            self._altitude_ever_stale = self._altitude_ever_stale or stale
+            controller.set_altitude_stale(stale)
+
             self._last_cmd = controller.update(sensed_state, control_dt)
 
         return self._last_cmd
+
+    @property
+    def altitude_ever_stale(self) -> bool:
+        """True if the altitude estimate ever went stale long enough to trip
+        Position::altitudeStale() (see Drone_Main/controller.cpp) at any
+        point since the last reset() -- i.e. the real controller would have
+        cut the motors here, same tier as the 45 deg tilt safety halt."""
+        return self._altitude_ever_stale

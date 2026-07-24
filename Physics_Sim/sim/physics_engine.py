@@ -38,13 +38,19 @@ class PhysicsEngine:
 
     # ------------------------------------------------------------------
     def reset(self, state: np.ndarray = None) -> np.ndarray:
-        """Returns initial state. Defaults to hover at z=1m."""
+        """Returns initial state. Defaults to starting on the ground (z=0) --
+        every real mission (Drone_Main/Waypoints.h) begins with an actual
+        takeoff climb from the ground, so this should be the starting point,
+        not an arbitrary mid-air altitude. Was 1.0m, a leftover from before
+        the mission's target altitude was capped at 0.4m -- diagnosed
+        2026-07-24: this made "peak overshoot" in print_metrics meaningless
+        for any mission-based run, since the largest |z - target| always
+        occurred at t=0 (the 1m-vs-0.4m gap), not from real flight dynamics."""
         for m in self._motors:
             m._actual_throttle = 0.0
         if state is not None:
             return state.copy()
         s = np.zeros(12)
-        s[2] = 1.0  # start 1 m up
         return s
 
     # ------------------------------------------------------------------
@@ -94,6 +100,31 @@ class PhysicsEngine:
 
         # Keep yaw in (-pi, pi]
         new_state[8] = _wrap_angle(new_state[8])
+
+        # Ground contact: nothing above modeled a floor, so a trial that
+        # lost altitude control (e.g. tripped the safety halt and fell
+        # under gravity with motors cut) would free-fall forever in a
+        # vacuum -- one such trial reached z=-218m over 45s, dominating
+        # its cost with a physically meaningless multi-kilometer "steady-
+        # state error" instead of just registering as unsafe. Real hardware
+        # would have hit the ground and stopped; approximate that with a
+        # simple inelastic floor clamp -- z can't go below 0, and vertical
+        # velocity zeroes out on contact so it settles instead of
+        # (nonsensically) re-accelerating downward through the floor.
+        if new_state[2] < 0.0:
+            new_state[2] = 0.0
+            new_state[5] = 0.0  # vz
+
+        # Symmetric sanity ceiling in the other direction. Not modeling any
+        # real physical limit (there's no ceiling in an open room) -- purely
+        # a numerical backstop so a hypothetical future runaway-climb bug
+        # can't blow up cost metrics the same way the fall-through-the-floor
+        # case did. Generous: mission altitude tops out at 0.4m and the
+        # rangefinder's own valid window (ALT_MAX in Position.cpp) is 3.5m.
+        elif new_state[2] > 10.0:
+            new_state[2] = 10.0
+            new_state[5] = 0.0
+
         return new_state
 
     # ------------------------------------------------------------------

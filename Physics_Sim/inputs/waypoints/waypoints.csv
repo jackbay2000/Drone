@@ -8,10 +8,14 @@
 # Origin = takeoff point
 #
 # A waypoint with z = 0 lands and ends the mission -- keep one last.
+#
+# Altitude capped at 0.4m to match Drone_Main/Waypoints.h: the VL53L1X
+# rangefinder's readings degrade above ~0.58m, so real missions stay well
+# clear of that (see project notes / commit history, 2026-07-19).
 
-  0.0,  0.0,  1.0,  True    # takeoff / hover
-  3.0,  0.0,  1.5,  False   # fly forward, nose tracks direction of travel
-  3.0,  3.0,  1.5,  False   # turn left
-  0.0,  3.0,  1.2,  True    # lock heading back to 0 for return leg
-  0.0,  0.0,  1.0,  True    # return home
+  0.0,  0.0,  0.4,  True    # takeoff / hover
+  3.0,  0.0,  0.4,  False   # fly forward, nose tracks direction of travel
+  3.0,  3.0,  0.4,  False   # turn left
+  0.0,  3.0,  0.4,  True    # lock heading back to 0 for return leg
+  0.0,  0.0,  0.4,  True    # return home
   0.0,  0.0,  0.0,  True    # land

@@ -154,8 +154,14 @@ if __name__ == '__main__':
     if args.gains_file:
         import re
         text = open(args.gains_file).read()
+        # Anchored to k[pid]_* so this only picks up actual gains, not the
+        # header comment fields winning_gains.txt also writes (cost=...,
+        # roll_rms_deg=..., etc.) -- those happen to match "word = number"
+        # too and were silently polluting the returned dict with junk keys
+        # (harmless since DroneController only reads known kp_*/ki_*/kd_*
+        # keys by name, but confusing in the printed/logged gains).
         gains = {m.group(1): float(m.group(2)) for m in
-                 re.finditer(r'(\w+)\s*=\s*([\d.eE+-]+)f?', text)}
+                 re.finditer(r'\b(k[pid]_\w+)\s*=\s*([\d.eE+-]+)f?', text)}
     else:
         from controller.arduino_parser import parse_gains
         gains = parse_gains(verbose=True)

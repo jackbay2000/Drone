@@ -37,7 +37,8 @@ import numpy as np
 from controller.base_controller import BaseController
 from sim.physics_engine import PhysicsEngine
 
-_HOVER_THROTTLE  = 0.5
+_HOVER_THROTTLE  = 0.3974  # Controller.h -- computed from this vehicle's real
+                            # mass/thrust curve, was an unvalidated 0.5 guess
 _POSITION_HZ     = 25.0
 _MAX_TILT        = 0.1396  # rad (~8 deg) — PositionPID::MAX_TILT
 _WAYPOINT_RADIUS = 0.15    # m   — PositionPID::WAYPOINT_RADIUS
@@ -132,6 +133,15 @@ class PythonDroneController(BaseController):
         # Position-loop timing accumulator
         self._pos_accum     = 0.0
 
+        # Set each tick by ControlLoopTiming from the Python estimator's own
+        # staleness read (see sim/estimator.py PositionEstimator.is_stale());
+        # mirrors Position::altitudeStale() in Drone_Main/controller.cpp.
+        self._altitude_stale = False
+
+    # ------------------------------------------------------------------
+    def set_altitude_stale(self, stale: bool):
+        self._altitude_stale = bool(stale)
+
     # ------------------------------------------------------------------
     def add_waypoint(self, x: float, y: float, z: float, keep_heading: bool = True):
         self._waypoints.append((float(x), float(y), float(z), bool(keep_heading)))
@@ -205,6 +215,12 @@ class PythonDroneController(BaseController):
         # Safety cut (mirrors controller.cpp: 45° = 0.785 rad, checked
         # before _cvYaw is updated and before the position loop runs)
         if abs(phi) > 0.785 or abs(theta) > 0.785:
+            return np.zeros(4)
+
+        # Same fail-safe pattern as the tilt cut above: flying on a stale
+        # altitude estimate with no way to know it's wrong. Mirrors the
+        # pos.altitudeStale() check in Drone_Main/controller.cpp.
+        if self._altitude_stale:
             return np.zeros(4)
 
         self._cv_yaw = self._leg_yaw
