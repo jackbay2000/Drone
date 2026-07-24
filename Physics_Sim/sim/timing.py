@@ -12,9 +12,14 @@ differs in three ways that matter for gain tuning:
      position loop nested inside Controller::update()) to 250 Hz via
      LOOP_PERIOD_US=4000.
 
-  2. Altitude refresh -- Rangefinder.cpp sets the VL53L1X timing budget to
-     20 ms ("up to 50 Hz") and only refreshes when dataReady(); roll/pitch/
-     yaw/x/y are recomputed every 250 Hz tick same as real hardware.
+  2. Altitude refresh -- Rangefinder.cpp explicitly sets the VL53L1X to
+     short distance mode with a 20 ms timing budget AND a matching 20 ms
+     inter-measurement period (fixed 2026-07-19 -- Adafruit_VL53L1X never
+     sets inter-measurement period itself, which defaults to 100 ms/~10 Hz
+     regardless of timing budget, so timing budget alone was NOT sufficient
+     to get 50 Hz; both had to be set), giving a real ~50 Hz refresh. The
+     estimator only updates altitude when dataReady(); roll/pitch/yaw/x/y
+     are recomputed every 250 Hz tick same as real hardware.
 
   3. Sensor estimation -- sim/estimator.py is a faithful port of
      Drone_Main/IMU.cpp's complementary filter and Drone_Main/Position.cpp's
@@ -37,7 +42,7 @@ from sim.estimator import ComplementaryFilter, PositionEstimator, FlowCountSynth
 G = 9.81
 
 CONTROL_HZ     = 250.0  # Drone_Main.ino: LOOP_PERIOD_US = 4000
-RANGEFINDER_HZ = 50.0   # Rangefinder.cpp: setTimingBudget(20) -> up to 50 Hz
+RANGEFINDER_HZ = 50.0   # Rangefinder.cpp: 20ms timing budget + 20ms inter-measurement period -> ~50 Hz
 
 # Raw-sensor noise/dropout. Applied at the RAW reading level (before the
 # ported estimator algorithms run), so calibration, the median-of-3 spike
